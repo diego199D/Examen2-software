@@ -63,7 +63,7 @@ def test_clase_referenciada_que_no_se_detecto():
 
 
 def test_revision_del_gimnasio_con_los_errores_reales_del_modelo():
-    # Lo que devolvió gpt-4o en la medición real: la línea "Socio realiza
+    # Lo que devolvió el modelo de visión en la medición real: la línea "Socio realiza
     # Pago" leída como Inscripcion–Pago (pasa justo por encima de Inscripcion).
     relaciones = [
         _rel("Gimnasio", "Entrenador"),

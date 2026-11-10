@@ -972,7 +972,7 @@ class TestDeduccionPorClavesForaneas:
     def test_gimnasio_con_los_errores_reales_queda_con_las_7_relaciones_correctas(
         self, client, db_session, crear_usuario, crear_proyecto, headers, monkeypatch
     ):
-        """Reproduce la respuesta real de gpt-4o con la imagen del gimnasio
+        """Reproduce la respuesta real del modelo de visión con la imagen del gimnasio
         (7 clases, líneas que se cruzan): la línea "Socio realiza Pago" leída
         como Inscripcion–Pago, y además la relación Clase–Inscripcion
         repetida en orden inverso. La imagen (simulada acá con la verdad del
