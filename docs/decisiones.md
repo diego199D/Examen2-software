@@ -85,6 +85,7 @@ Otras decisiones del generador:
 - **Mejoras medidas con Gemini real**:
   - Se agregaron reglas explícitas al prompt: no modificar el diagrama ante preguntas teóricas; "la clase anterior" es la última mencionada en el chat; texto plano sin Markdown.
   - Hay una corrección determinística en código de la orientación todo/parte. En la primera medición, Gemini a veces dibujaba la composición al revés.
+- **Moderador**: ante propuestas distintas entre integrantes, el Senior resume con neutralidad la postura de cada uno (por nombre), compara ventajas y desventajas y recomienda una opción; si la conversación se desvía del diseño, la reencauza. Verificado con Gemini real ("Juan quiere herencia, María un atributo rol").
 - **Clase de asociación**: el Senior la usa cuando un N:M tiene atributos propios. Se verificó con "Estudiante–Curso con nota y fecha", que produjo `Inscripcion` como clase de asociación.
 
 ## 4b. Sesión por pestaña
