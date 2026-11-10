@@ -14,6 +14,7 @@ export function RegistroPage() {
   const navigate = useNavigate()
 
   const [nombreCompleto, setNombreCompleto] = useState('')
+  const [nombreGrupo, setNombreGrupo] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmarPassword, setConfirmarPassword] = useState('')
@@ -35,7 +36,12 @@ export function RegistroPage() {
 
     setSubmitting(true)
     try {
-      await registro({ nombre_completo: nombreCompleto.trim(), email: email.trim(), password })
+      await registro({
+        nombre_completo: nombreCompleto.trim(),
+        email: email.trim(),
+        password,
+        nombre_grupo: nombreGrupo.trim(),
+      })
       navigate('/', { replace: true })
     } catch (err) {
       setError(getApiErrorMessage(err, 'No se pudo crear la cuenta'))
@@ -59,6 +65,14 @@ export function RegistroPage() {
           maxLength={150}
           value={nombreCompleto}
           onChange={(e) => setNombreCompleto(e.target.value)}
+        />
+        <TextField
+          label="Nombre del grupo"
+          required
+          maxLength={100}
+          hint="Si el grupo ya existe te unís a él; si no, se crea. Los integrantes comparten sus tableros."
+          value={nombreGrupo}
+          onChange={(e) => setNombreGrupo(e.target.value)}
         />
         <TextField
           label="Email"

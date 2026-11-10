@@ -7,6 +7,7 @@ from app.db.session import get_db
 from app.models.proyecto_colaborador import ProyectoColaborador
 from app.models.usuario import Usuario
 from app.routers.auth import get_current_user
+from app.services.grupos import obtener_o_crear_grupo
 from app.schemas.usuario import UsuarioBusquedaOut, UsuarioOut, UsuarioUpdate
 from app.services.acceso import obtener_proyecto_con_acceso
 
@@ -68,6 +69,8 @@ def actualizar_perfil(
     """CU03 - Editar el perfil: nombre, email y (opcionalmente) contraseña."""
     if datos.nombre_completo is not None:
         usuario_actual.nombre_completo = datos.nombre_completo
+    if datos.nombre_grupo is not None and datos.nombre_grupo.strip():
+        usuario_actual.grupo = obtener_o_crear_grupo(datos.nombre_grupo, db)
 
     if datos.email is not None and datos.email != usuario_actual.email:
         existe = db.scalar(select(Usuario).where(Usuario.email == datos.email))

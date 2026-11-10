@@ -30,6 +30,7 @@ export function PerfilPage() {
         key={`datos-${user.id}-${user.email}`}
         nombreInicial={user.nombre_completo}
         emailInicial={user.email}
+        grupoInicial={user.nombre_grupo ?? ''}
         onSaved={refreshUser}
       />
       <PasswordForm />
@@ -40,19 +41,23 @@ export function PerfilPage() {
 function DatosForm({
   nombreInicial,
   emailInicial,
+  grupoInicial,
   onSaved,
 }: {
   nombreInicial: string
   emailInicial: string
+  grupoInicial: string
   onSaved: () => Promise<void>
 }) {
   const [nombre, setNombre] = useState(nombreInicial)
   const [email, setEmail] = useState(emailInicial)
+  const [grupo, setGrupo] = useState(grupoInicial)
   const [error, setError] = useState<string | null>(null)
   const [ok, setOk] = useState(false)
   const [submitting, setSubmitting] = useState(false)
 
-  const sinCambios = nombre.trim() === nombreInicial && email.trim() === emailInicial
+  const sinCambios =
+    nombre.trim() === nombreInicial && email.trim() === emailInicial && grupo.trim() === grupoInicial
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
@@ -60,7 +65,11 @@ function DatosForm({
     setOk(false)
     setSubmitting(true)
     try {
-      await updateMe({ nombre_completo: nombre.trim(), email: email.trim() })
+      await updateMe({
+        nombre_completo: nombre.trim(),
+        email: email.trim(),
+        ...(grupo.trim() && grupo.trim() !== grupoInicial ? { nombre_grupo: grupo.trim() } : {}),
+      })
       await onSaved()
       setOk(true)
     } catch (err) {
@@ -88,6 +97,13 @@ function DatosForm({
         required
         value={email}
         onChange={(e) => setEmail(e.target.value)}
+      />
+      <TextField
+        label="Grupo"
+        maxLength={100}
+        hint="Cambiar de grupo te une a otro existente (o lo crea)."
+        value={grupo}
+        onChange={(e) => setGrupo(e.target.value)}
       />
       <div className="card-form__actions">
         <Button type="submit" variant="primary" loading={submitting} disabled={sinCambios}>

@@ -19,6 +19,14 @@ class Proyecto(Base):
     fecha_creacion: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     id_administrador: Mapped[int] = mapped_column(ForeignKey("usuarios.id"), nullable=False)
 
+    # Segundo parcial (RF-IA-09): grado de intervención del Senior en la sala
+    # de este proyecto: consultivo | con_confirmacion | automatico.
+    modo_ia: Mapped[str] = mapped_column(String(20), nullable=False, default="automatico", server_default="automatico")
+    # Resumen de los mensajes viejos del chat (ver services/senior.py): se
+    # resumen en vez de cortarse cuando el historial crece demasiado.
+    resumen_chat: Mapped[str | None] = mapped_column(Text, nullable=True)
+    resumen_hasta_id: Mapped[int | None] = mapped_column(nullable=True)
+
     administrador = relationship("Usuario", back_populates="proyectos_administrados")
     colaboradores = relationship(
         "ProyectoColaborador", back_populates="proyecto", cascade="all, delete-orphan"

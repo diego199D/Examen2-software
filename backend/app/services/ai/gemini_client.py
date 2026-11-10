@@ -304,3 +304,15 @@ def image_to_diagram(
     ]
     respuesta = _generar(modelo or settings.GEMINI_VISION_MODEL, contents, config)
     return _parsear_json(respuesta)
+
+
+def generate_text(system: str, texto: str, *, modelo: str | None = None) -> str:
+    """Texto libre (p. ej. resumir el historial del chat)."""
+    from google.genai import types
+
+    config = types.GenerateContentConfig(system_instruction=system)
+    respuesta = _generar(modelo or settings.GEMINI_MODEL, _contenidos([("user", texto)]), config)
+    try:
+        return respuesta.text or ""
+    except Exception:
+        return ""

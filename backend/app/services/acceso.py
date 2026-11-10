@@ -26,6 +26,12 @@ def obtener_proyecto_propio(proyecto_id: int, usuario: Usuario, db: Session) -> 
     return proyecto
 
 
+def es_del_mismo_grupo(proyecto: Proyecto, usuario: Usuario) -> bool:
+    """Segundo parcial (RF-RT-02, salas por grupo): los integrantes del grupo
+    del dueño entran a su tablero igual que un colaborador activo."""
+    return usuario.id_grupo is not None and proyecto.administrador.id_grupo == usuario.id_grupo
+
+
 def obtener_proyecto_con_acceso(proyecto_id: int, usuario: Usuario, db: Session) -> Proyecto:
     """Devuelve el proyecto si el usuario es su administrador o un colaborador
     activo; si no, levanta 404 (no existe) o 403 (sin acceso). Compartido por
@@ -37,6 +43,8 @@ def obtener_proyecto_con_acceso(proyecto_id: int, usuario: Usuario, db: Session)
             detail="Proyecto no encontrado",
         )
     if proyecto.id_administrador == usuario.id:
+        return proyecto
+    if es_del_mismo_grupo(proyecto, usuario):
         return proyecto
 
     es_colaborador = db.scalar(

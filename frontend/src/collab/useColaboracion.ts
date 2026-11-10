@@ -40,7 +40,7 @@ function colorPara(clientId: number): string {
   return COLORES[clientId % COLORES.length]
 }
 
-function wsBaseUrl(): string {
+export function wsBaseUrl(): string {
   const url = new URL(API_BASE_URL)
   url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:'
   return url.toString().replace(/\/+$/, '')

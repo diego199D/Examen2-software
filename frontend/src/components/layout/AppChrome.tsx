@@ -29,6 +29,11 @@ export function AppChrome() {
 
         <div className="chrome-bar__user">
           {user && (
+            <span className="chrome-bar__grupo" title="Tu grupo de trabajo">
+              Grupo: <strong>{user.nombre_grupo ?? 'sin grupo'}</strong>
+            </span>
+          )}
+          {user && (
             <span className="chrome-bar__chip">
               <span className="chrome-bar__avatar" aria-hidden="true">
                 {iniciales(user.nombre_completo)}

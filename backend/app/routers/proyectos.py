@@ -50,7 +50,23 @@ def listar_proyectos(
     for proyecto in colaborados:
         proyecto.rol_en_proyecto = RolUsuario.COLABORADOR
 
-    return sorted(propios + colaborados, key=lambda p: p.fecha_creacion, reverse=True)
+    # Segundo parcial: tableros de los demás integrantes del grupo.
+    del_grupo: list[Proyecto] = []
+    if usuario_actual.id_grupo is not None:
+        ya = {p.id for p in propios + colaborados}
+        del_grupo = [
+            p
+            for p in db.scalars(
+                select(Proyecto)
+                .join(Usuario, Usuario.id == Proyecto.id_administrador)
+                .where(Usuario.id_grupo == usuario_actual.id_grupo, Proyecto.id_administrador != usuario_actual.id)
+            )
+            if p.id not in ya
+        ]
+        for proyecto in del_grupo:
+            proyecto.rol_en_proyecto = RolUsuario.COLABORADOR
+
+    return sorted(propios + colaborados + del_grupo, key=lambda p: p.fecha_creacion, reverse=True)
 
 
 @router.post("", response_model=ProyectoOut, status_code=status.HTTP_201_CREATED)

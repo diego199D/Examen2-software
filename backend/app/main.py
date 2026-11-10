@@ -17,6 +17,7 @@ from app.routers import (
     reportes,
     usuarios,
     ws_diagramas,
+    ws_sala,
 )
 
 app = FastAPI(title=settings.PROJECT_NAME)
@@ -45,6 +46,7 @@ app.include_router(reportes.router)
 app.include_router(comandos_voz.router)
 app.include_router(agente.router)
 app.include_router(reconocimiento_foto.router)
+app.include_router(ws_sala.router)
 
 
 @app.get("/")

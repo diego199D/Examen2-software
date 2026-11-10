@@ -215,7 +215,7 @@ export function MenuArchivo({
               cerrar()
             }}
           >
-            {generandoBackend ? 'Generando…' : 'Generar backend'}
+            {generandoBackend ? 'Generando…' : 'Generar Backend y APIs'}
           </ItemMenu>
 
           {mostrarGenerarFrontend && (

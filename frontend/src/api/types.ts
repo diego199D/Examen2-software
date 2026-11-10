@@ -6,6 +6,9 @@ export type Usuario = {
   email: string
   rol: RolUsuario
   fecha_registro: string
+  // Segundo parcial: grupo de trabajo (sala compartida).
+  id_grupo?: number | null
+  nombre_grupo?: string | null
 }
 
 export type PerfilUpdate = {
@@ -13,6 +16,7 @@ export type PerfilUpdate = {
   email?: string
   password_actual?: string
   password_nuevo?: string
+  nombre_grupo?: string
 }
 
 export type Proyecto = {
@@ -33,6 +37,7 @@ export type RegistroInput = {
   nombre_completo: string
   email: string
   password: string
+  nombre_grupo: string
 }
 
 export type Colaborador = {

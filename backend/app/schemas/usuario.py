@@ -19,6 +19,9 @@ class UsuarioRegistro(BaseModel):
     nombre_completo: str = Field(min_length=1, max_length=150)
     email: EmailStr
     password: str = Field(min_length=8, max_length=72)
+    # Segundo parcial: nombre del grupo (se une si existe, si no se crea).
+    # Opcional en la API por compatibilidad; el formulario lo exige.
+    nombre_grupo: str | None = Field(default=None, max_length=100)
 
 
 class UsuarioUpdate(BaseModel):
@@ -26,6 +29,7 @@ class UsuarioUpdate(BaseModel):
     email: EmailStr | None = None
     password_actual: str | None = None
     password_nuevo: str | None = Field(default=None, min_length=8, max_length=72)
+    nombre_grupo: str | None = Field(default=None, min_length=1, max_length=100)
 
 
 class UsuarioOut(UsuarioBase):
@@ -34,6 +38,8 @@ class UsuarioOut(UsuarioBase):
     id: int
     rol: RolUsuario
     fecha_registro: datetime
+    id_grupo: int | None = None
+    nombre_grupo: str | None = None
 
 
 class UsuarioBusquedaOut(BaseModel):

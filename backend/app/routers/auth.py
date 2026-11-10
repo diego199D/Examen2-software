@@ -12,6 +12,7 @@ from app.core.security import (
 from app.db.session import get_db
 from app.models.usuario import RolUsuario, Usuario
 from app.schemas.usuario import Token, UsuarioRegistro
+from app.services.grupos import obtener_o_crear_grupo
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -54,6 +55,8 @@ def registrar_usuario(
         password_hash=hashear_password(datos.password),
         rol=RolUsuario.ADMINISTRADOR,
     )
+    if datos.nombre_grupo and datos.nombre_grupo.strip():
+        usuario.grupo = obtener_o_crear_grupo(datos.nombre_grupo, db)
     db.add(usuario)
     db.commit()
     db.refresh(usuario)

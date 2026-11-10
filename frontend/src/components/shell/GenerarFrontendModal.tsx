@@ -76,7 +76,7 @@ export function GenerarFrontendModal({ proyectoId, onClose }: Props) {
         <TextField
           label="URL base del backend"
           placeholder="http://localhost:8080"
-          hint="La app Flutter generada va a consumir el backend en esta URL (rutas /api/{plural}, ej. las que genera 'Generar backend')."
+          hint="La app Flutter generada va a consumir el backend en esta URL (rutas /api/{plural}, ej. las que genera 'Generar Backend y APIs')."
           value={urlBase}
           error={mostrarErrorUrl ? 'Ingresa una URL válida, ej. http://localhost:8080' : undefined}
           onChange={(e) => setUrlBase(e.target.value)}

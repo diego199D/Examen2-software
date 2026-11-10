@@ -389,6 +389,11 @@ export function Toolbar({
         </Link>
         <span className="app-toolbar__divider" aria-hidden="true" />
         <span className="app-toolbar__project">{project.nombre}</span>
+        {user && (
+          <span className="app-toolbar__grupo" title="Grupo de trabajo">
+            Grupo: <strong>{user.nombre_grupo ?? 'sin grupo'}</strong>
+          </span>
+        )}
       </div>
 
       <div className="app-toolbar__group">
@@ -400,7 +405,7 @@ export function Toolbar({
         </ToolButton>
         <BotonComandoVoz comandoVoz={comandoVoz} />
         <ToolButton icon={<IconChat />} primary={agenteAbierto} onClick={onToggleAgente}>
-          Asistente
+          Chat · Senior
         </ToolButton>
         <MenuArchivo
           onImportarXmi={() => inputArchivoXmiRef.current?.click()}

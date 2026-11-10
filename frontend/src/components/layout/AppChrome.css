@@ -96,3 +96,13 @@
   margin: 0 auto;
   padding: var(--space-6) var(--space-4);
 }
+
+/* Segundo parcial: nombre del grupo siempre visible. */
+.chrome-bar__grupo {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  padding: 2px var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  white-space: nowrap;
+}

@@ -1,15 +1,16 @@
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import { ReactFlowProvider } from 'reactflow'
 import type { Connection, Edge } from 'reactflow'
 
-import type { Proyecto } from '../../api/types'
-import { AgentePanel } from './AgentePanel'
+import type { DiagramaData, Proyecto } from '../../api/types'
+import { useAuth } from '../../auth/useAuth'
+import { useSala } from '../../collab/useSala'
+import { ChatGrupalPanel } from './ChatGrupalPanel'
 import { AccionesRelacionContext } from './accionesRelacion'
 import { CanvasArea } from './CanvasArea'
 import { RelacionEditorModal } from './RelacionEditorModal'
 import { Sidebar } from './Sidebar'
 import { Toolbar } from './Toolbar'
-import { useAgente } from './useAgente'
 import { useComandoVoz } from './useComandoVoz'
 import type { EdgeData } from './useDiagrama'
 import { nuevaClaseVacia, useDiagrama } from './useDiagrama'
@@ -31,7 +32,20 @@ const RELACION_DEFAULT = {
 export function AppShell({ project }: { project: Proyecto }) {
   const diagrama = useDiagrama(project.id)
   const comandoVoz = useComandoVoz(project.id, diagrama)
-  const agente = useAgente(project.id, diagrama)
+  const { user } = useAuth()
+  // Segundo parcial: chat grupal + Senior. El panel privado del asistente
+  // (CU13) se reemplazó por este chat público (no hay canales privados con
+  // la IA). Los cambios que aplica el Senior llegan por Yjs como cualquier
+  // cambio remoto; el snapshot del evento solo se usa si Yjs no conectó.
+  const { estadoConexion, importarDiagrama } = diagrama
+  const onDiagramaIA = useCallback(
+    (datos: DiagramaData) => {
+      if (estadoConexion !== 'conectado') importarDiagrama(datos)
+    },
+    [estadoConexion, importarDiagrama],
+  )
+  const sala = useSala(project.id, onDiagramaIA)
+  const [chatAbierto, setChatAbierto] = useState(true)
   const [modal, setModal] = useState<ModalDiagrama>(null)
   const [sidebarAbierto, setSidebarAbierto] = useState(true)
 
@@ -59,7 +73,7 @@ export function AppShell({ project }: { project: Proyecto }) {
         className={
           'app-shell' +
           (sidebarAbierto ? '' : ' app-shell--sidebar-colapsado') +
-          (agente.abierto ? ' app-shell--agente-abierto' : '')
+          (chatAbierto ? ' app-shell--agente-abierto' : '')
         }
       >
         <Toolbar
@@ -73,8 +87,8 @@ export function AppShell({ project }: { project: Proyecto }) {
           diagramaVacio={diagrama.estado === 'listo' && diagrama.nodes.length === 0}
           onDiagramaReemplazado={diagrama.importarDiagrama}
           comandoVoz={comandoVoz}
-          agenteAbierto={agente.abierto}
-          onToggleAgente={agente.toggleAbierto}
+          agenteAbierto={chatAbierto}
+          onToggleAgente={() => setChatAbierto((v) => !v)}
         />
         <Sidebar
           clases={diagrama.nodes.map((n) => ({ id: n.id, nombre: n.data.clase.nombre }))}
@@ -101,9 +115,7 @@ export function AppShell({ project }: { project: Proyecto }) {
           onRehacer={diagrama.rehacer}
         />
         </AccionesRelacionContext.Provider>
-        {agente.abierto && (
-          <AgentePanel mensajes={agente.mensajes} enviando={agente.enviando} onEnviar={agente.enviarMensaje} />
-        )}
+        {chatAbierto && <ChatGrupalPanel sala={sala} usuarioId={user?.id} />}
       </div>
 
       {modal?.tipo === 'relacion-nueva' && (

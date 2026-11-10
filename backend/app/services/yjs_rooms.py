@@ -94,6 +94,10 @@ class DiagramaRoom:
     def __init__(self, proyecto_id: int, estado_inicial: DiagramaIO) -> None:
         self.proyecto_id = proyecto_id
         self.clientes = 0
+        # Segundo parcial: contador de cambios del documento (se informa en
+        # DIAGRAM_SNAPSHOT del canal de la sala). La consistencia entre
+        # clientes la garantiza el CRDT de Yjs, no este número.
+        self.version = 0
         self._guardado_pendiente: asyncio.TimerHandle | None = None
         self._guardando = asyncio.Lock()
         self._tarea_room: asyncio.Task | None = None
@@ -123,7 +127,31 @@ class DiagramaRoom:
             await self._tarea_room
 
     def _on_change(self, event) -> None:
+        self.version += 1
         self._programar_guardado()
+
+    def diagrama_actual(self) -> DiagramaIO:
+        return self._diagrama_actual()
+
+    def escribir(self, nuevo: DiagramaIO) -> None:
+        """Segundo parcial: vuelca `nuevo` al documento Yjs en UNA transacción
+        (diff por id: solo se reescriben las clases/relaciones que cambiaron).
+        Yjs lo propaga a todos los clientes conectados como cualquier otro
+        cambio remoto -- así las mutaciones del Senior se ven igual en todas
+        las pantallas."""
+        actuales_c = {c.id: c for c in self._diagrama_actual().clases}
+        actuales_r = {r.id: r for r in self._diagrama_actual().relaciones}
+        with self.ydoc.transaction(origin="servidor"):
+            for c in nuevo.clases:
+                if actuales_c.get(c.id) != c:
+                    self._clases[c.id] = _clase_a_map(c)
+            for id_ in set(actuales_c) - {c.id for c in nuevo.clases}:
+                del self._clases[id_]
+            for r in nuevo.relaciones:
+                if actuales_r.get(r.id) != r:
+                    self._relaciones[r.id] = _relacion_a_map(r)
+            for id_ in set(actuales_r) - {r.id for r in nuevo.relaciones}:
+                del self._relaciones[id_]
 
     def _programar_guardado(self) -> None:
         loop = asyncio.get_running_loop()
@@ -217,3 +245,33 @@ def _cargar_estado_inicial(proyecto_id: int) -> DiagramaIO:
 
 
 gestor_salas = GestorSalas()
+
+
+async def leer_diagrama(proyecto_id: int) -> tuple[DiagramaIO, int]:
+    """Estado más reciente del diagrama: el del room en memoria si hay
+    alguien editando (puede tener cambios que todavía no llegaron a la BD),
+    si no el de la BD."""
+    sala = gestor_salas.sala_activa(proyecto_id)
+    if sala is not None:
+        return sala.diagrama_actual(), sala.version
+    return await asyncio.to_thread(_cargar_estado_inicial, proyecto_id), 0
+
+
+async def escribir_diagrama(proyecto_id: int, nuevo: DiagramaIO) -> int:
+    """Aplica un diagrama completo ya validado: por Yjs si el room está
+    activo (y se persiste de inmediato), o directo a la BD si no."""
+    sala = gestor_salas.sala_activa(proyecto_id)
+    if sala is not None:
+        sala.escribir(nuevo)
+        await sala.guardar_ahora()
+        return sala.version
+
+    def _guardar() -> None:
+        db = _nueva_sesion()
+        try:
+            guardar_diagrama(proyecto_id, nuevo, db)
+        finally:
+            db.close()
+
+    await asyncio.to_thread(_guardar)
+    return 0

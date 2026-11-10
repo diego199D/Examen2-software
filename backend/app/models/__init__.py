@@ -5,3 +5,5 @@ from app.models.atributo import Atributo, VisibilidadMiembro
 from app.models.metodo import Metodo
 from app.models.clase_uml import ClaseUml
 from app.models.relacion import Relacion, TipoRelacion
+from app.models.grupo import Grupo
+from app.models.mensaje_chat import MensajeChat, TipoMensaje
