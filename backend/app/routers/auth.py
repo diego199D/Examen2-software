@@ -11,8 +11,8 @@ from app.core.security import (
 )
 from app.db.session import get_db
 from app.models.usuario import RolUsuario, Usuario
-from app.schemas.usuario import Token, UsuarioRegistro
-from app.services.grupos import obtener_o_crear_grupo
+from app.schemas.usuario import LoginGrupo, Token, UsuarioRegistro
+from app.services.grupos import buscar_grupo, integrantes_con_nombre, obtener_o_crear_grupo
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -33,6 +33,25 @@ def login(
             headers={"WWW-Authenticate": "Bearer"},
         )
     return Token(access_token=crear_access_token(subject=usuario.id))
+
+
+@router.post("/login-grupo", response_model=Token)
+def login_grupo(datos: LoginGrupo, db: Session = Depends(get_db)) -> Token:
+    """Segundo parcial (RF-RT-01): inicio de sesión con nombre personal +
+    nombre de grupo + contraseña (el login por email sigue disponible). El
+    nombre es único dentro de cada grupo (se valida al registrarse)."""
+    error = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Nombre, grupo o contraseña incorrectos",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    grupo = buscar_grupo(datos.nombre_grupo, db)
+    if grupo is None:
+        raise error
+    candidatos = [u for u in integrantes_con_nombre(grupo, datos.nombre_completo, db) if verificar_password(datos.password, u.password_hash)]
+    if len(candidatos) != 1:
+        raise error
+    return Token(access_token=crear_access_token(subject=candidatos[0].id))
 
 
 @router.post("/registro", response_model=Token, status_code=status.HTTP_201_CREATED)
@@ -56,7 +75,14 @@ def registrar_usuario(
         rol=RolUsuario.ADMINISTRADOR,
     )
     if datos.nombre_grupo and datos.nombre_grupo.strip():
-        usuario.grupo = obtener_o_crear_grupo(datos.nombre_grupo, db)
+        grupo = obtener_o_crear_grupo(datos.nombre_grupo, db)
+        if integrantes_con_nombre(grupo, datos.nombre_completo, db):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f'Ya hay un integrante llamado "{datos.nombre_completo}" en el grupo {grupo.nombre}. '
+                "Usá otro nombre (p. ej. con tu apellido).",
+            )
+        usuario.grupo = grupo
     db.add(usuario)
     db.commit()
     db.refresh(usuario)

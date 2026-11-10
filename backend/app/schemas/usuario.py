@@ -54,6 +54,14 @@ class UsuarioBusquedaOut(BaseModel):
     rol: RolUsuario
 
 
+class LoginGrupo(BaseModel):
+    """Segundo parcial: inicio de sesión con nombre personal + nombre de grupo."""
+
+    nombre_completo: str = Field(min_length=1, max_length=150)
+    nombre_grupo: str = Field(min_length=1, max_length=100)
+    password: str = Field(min_length=1, max_length=72)
+
+
 class Token(BaseModel):
     access_token: str
     token_type: str = "bearer"

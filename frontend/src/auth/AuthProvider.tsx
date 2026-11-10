@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 
-import { loginRequest, registroRequest } from '../api/auth'
+import { loginGrupoRequest, loginRequest, registroRequest } from '../api/auth'
 import { setUnauthorizedHandler } from '../api/client'
 import { getMe } from '../api/usuarios'
 import type { RegistroInput, Usuario } from '../api/types'
@@ -53,6 +53,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setStatus('authenticated')
   }, [])
 
+  const loginGrupo = useCallback(async (nombreCompleto: string, nombreGrupo: string, password: string) => {
+    const token = await loginGrupoRequest(nombreCompleto, nombreGrupo, password)
+    setToken(token)
+    const u = await getMe()
+    setUser(u)
+    setStatus('authenticated')
+  }, [])
+
   const registro = useCallback(async (datos: RegistroInput) => {
     const token = await registroRequest(datos)
     setToken(token)
@@ -72,7 +80,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   return (
-    <AuthContext.Provider value={{ user, status, login, registro, logout, refreshUser }}>
+    <AuthContext.Provider value={{ user, status, login, loginGrupo, registro, logout, refreshUser }}>
       {children}
     </AuthContext.Provider>
   )

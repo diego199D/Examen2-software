@@ -188,7 +188,7 @@ npm install; npm run dev                 # http://localhost:5173
 
 ## 6. Cómo probar cada escenario
 
-Preparación: registrar dos usuarios con el **mismo nombre de grupo** (por ejemplo "Juan" y "María"). Juan crea un proyecto con la clase `Factura`. Los dos lo abren en navegadores distintos (María lo ve en su lista porque es del mismo grupo).
+Preparación: registrar dos usuarios con el **mismo nombre de grupo** (después pueden entrar con *nombre + grupo + contraseña*) (por ejemplo "Juan" y "María"). Juan crea un proyecto con la clase `Factura`. Los dos lo abren en navegadores distintos (María lo ve en su lista porque es del mismo grupo).
 
 | Escenario | Pasos | Qué se espera |
 |---|---|---|

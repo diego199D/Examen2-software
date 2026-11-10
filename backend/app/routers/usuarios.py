@@ -7,7 +7,7 @@ from app.db.session import get_db
 from app.models.proyecto_colaborador import ProyectoColaborador
 from app.models.usuario import Usuario
 from app.routers.auth import get_current_user
-from app.services.grupos import obtener_o_crear_grupo
+from app.services.grupos import integrantes_con_nombre, obtener_o_crear_grupo
 from app.schemas.usuario import UsuarioBusquedaOut, UsuarioOut, UsuarioUpdate
 from app.services.acceso import obtener_proyecto_con_acceso
 
@@ -71,6 +71,14 @@ def actualizar_perfil(
         usuario_actual.nombre_completo = datos.nombre_completo
     if datos.nombre_grupo is not None and datos.nombre_grupo.strip():
         usuario_actual.grupo = obtener_o_crear_grupo(datos.nombre_grupo, db)
+    if usuario_actual.grupo is not None and integrantes_con_nombre(
+        usuario_actual.grupo, usuario_actual.nombre_completo, db, excluir_id=usuario_actual.id
+    ):
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Ya hay un integrante con ese nombre en el grupo (el nombre es único dentro de cada grupo).",
+        )
 
     if datos.email is not None and datos.email != usuario_actual.email:
         existe = db.scalar(select(Usuario).where(Usuario.email == datos.email))

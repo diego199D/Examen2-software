@@ -69,7 +69,7 @@ Otras decisiones del generador:
   - La "sala por grupo" significa que los integrantes del grupo del dueño de un proyecto entran a su tablero igual que un colaborador.
   - Solo el dueño administra el proyecto: editarlo, borrarlo y gestionar colaboradores.
   - Se mantienen los colaboradores explícitos del primer parcial (CU05) para no perder funcionalidad.
-- **Login**: sigue siendo con email y contraseña, por seguridad. El nombre del grupo se elige al registrarse y se puede cambiar desde el perfil.
+- **Login**: por defecto se entra con **nombre personal + nombre de grupo + contraseña** (`POST /auth/login-grupo`); el login con email sigue disponible en otra pestaña. Para que no sea ambiguo, el nombre personal es único dentro de cada grupo (sin distinguir mayúsculas, tildes ni espacios): registrarse o renombrarse con un nombre ya usado en el grupo da 409. El grupo se elige al registrarse y se puede cambiar desde el perfil.
 - **Persistencia**:
   - El chat se guarda en `mensajes_chat` y el modo de la IA en `proyectos.modo_ia`.
   - Si todos se desconectan mientras el Senior está respondiendo, la sala sigue viva hasta que termina y la respuesta queda guardada.

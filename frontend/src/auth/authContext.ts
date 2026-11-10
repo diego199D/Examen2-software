@@ -8,6 +8,7 @@ export type AuthState = {
   user: Usuario | null
   status: AuthStatus
   login: (email: string, password: string) => Promise<void>
+  loginGrupo: (nombreCompleto: string, nombreGrupo: string, password: string) => Promise<void>
   registro: (datos: RegistroInput) => Promise<void>
   logout: () => void
   refreshUser: () => Promise<void>
