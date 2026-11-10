@@ -1236,3 +1236,14 @@ def test_verificar_lineas_ancla_multiplicidades_por_nombre(monkeypatch):
     # Índice fuera de rango ignorado: el tercer par queda "sin verificar".
     assert lineas[2] == reconocimiento_foto._LINEA_SIN_VERIFICAR
     assert falso.kwargs["modelo"] == reconocimiento_foto.settings.GEMINI_VISION_MODEL
+
+
+def test_nombres_con_notacion_uml_se_limpian():
+    """Medido con Gemini: a veces devuelve "- nombre" o "edad: int" como nombre."""
+    clase = ClaseDetectadaIO(
+        nombre="Persona",
+        atributos=[{"nombre": "- nombre", "tipo": "String"}, {"nombre": "+ edad: int"}],
+        metodos=[{"nombre": "+ getEdad()", "tipo_retorno": "int"}],
+    )
+    assert [(a.nombre, a.tipo) for a in clase.atributos] == [("nombre", "String"), ("edad", "int")]
+    assert clase.metodos[0].nombre == "getEdad"

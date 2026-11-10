@@ -75,6 +75,9 @@ export function useSala(proyectoId: number, onDiagramaIA?: (diagrama: DiagramaDa
         case 'CHAT_MESSAGE': {
           const m = p.mensaje as MensajeSala
           setMensajes((ms) => (ms.some((x) => x.id === m.id) ? ms : [...ms, m]))
+          // La respuesta ya llegó: el indicador se apaga en el acto (si hay
+          // más preguntas en cola, el próximo AI_TYPING lo vuelve a encender).
+          if (m.tipo === 'senior_ai') setSeniorEscribiendo(null)
           break
         }
         case 'CHAT_MESSAGE_UPDATED': {

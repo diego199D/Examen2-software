@@ -83,21 +83,35 @@ class TestReintentos:
         monkeypatch.setattr(gemini_client.settings, "GEMINI_FALLBACK_MODEL", "respaldo")
         return llamadas
 
-    def test_429_se_reintenta_y_luego_funciona(self, monkeypatch):
-        llamadas = self._preparar(monkeypatch, [429, 429])
+    def test_429_pasa_enseguida_al_siguiente_modelo(self, monkeypatch):
+        llamadas = self._preparar(monkeypatch, [429])
         assert gemini_client._generar("principal", [], None) == "ok"
-        assert llamadas == ["principal"] * 3
+        assert llamadas == ["principal", "respaldo"]
 
-    def test_saturado_pasa_al_modelo_de_respaldo(self, monkeypatch):
+    def test_saturado_se_reintenta_y_luego_pasa_al_respaldo(self, monkeypatch):
         llamadas = self._preparar(monkeypatch, [503, 503, 503])
         assert gemini_client._generar("principal", [], None) == "ok"
         assert llamadas == ["principal"] * 3 + ["respaldo"]
+
+    def test_varios_respaldos_en_orden(self, monkeypatch):
+        llamadas = self._preparar(monkeypatch, [429, 429])
+        monkeypatch.setattr(gemini_client.settings, "GEMINI_FALLBACK_MODEL", "r1, r2,principal")
+        assert gemini_client._generar("principal", [], None) == "ok"
+        assert llamadas == ["principal", "r1", "r2"]
 
     def test_agotado_da_mensaje_claro(self, monkeypatch):
         self._preparar(monkeypatch, [429] * 10)
         with pytest.raises(IANoDisponibleError) as exc:
             gemini_client._generar("principal", [], None)
         assert "límite" in str(exc.value)
+
+    def test_presupuesto_de_tiempo(self, monkeypatch):
+        llamadas = self._preparar(monkeypatch, [503] * 10)
+        reloj = iter(range(0, 1000, 40))
+        monkeypatch.setattr(gemini_client.time, "monotonic", lambda: next(reloj))
+        with pytest.raises(IANoDisponibleError):
+            gemini_client._generar("principal", [], None)
+        assert len(llamadas) <= 2
 
     def test_error_400_no_se_reintenta(self, monkeypatch):
         llamadas = self._preparar(monkeypatch, [400])

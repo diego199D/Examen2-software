@@ -22,6 +22,20 @@ const ETIQUETA_TIPO: Record<string, string> = {
   COMPOSICION: 'composición',
 }
 
+// Una sola petición por archivo elegido: en desarrollo React StrictMode monta
+// el efecto dos veces y antes eso disparaba DOS reconocimientos con Gemini en
+// paralelo (el doble de costo y de espera).
+const peticionesPorArchivo = new WeakMap<File, Promise<ReconocimientoFotoResultado>>()
+
+function reconocerUnaVez(proyectoId: number, archivo: File): Promise<ReconocimientoFotoResultado> {
+  let p = peticionesPorArchivo.get(archivo)
+  if (!p) {
+    p = reconocerDiagramaFoto(proyectoId, archivo)
+    peticionesPorArchivo.set(archivo, p)
+  }
+  return p
+}
+
 /**
  * CU12 — reconocimiento de diagrama por fotografía. Al montarse, sube la
  * imagen y muestra el resultado como VISTA PREVIA (nunca se toca el
@@ -40,7 +54,7 @@ export function ReconocimientoFotoModal({ proyectoId, archivo, onClose, onAplica
     // cerrar) -- el estado inicial de `analizando`/`error` ya cubre el caso
     // normal, no hace falta resetearlos acá.
     let vivo = true
-    reconocerDiagramaFoto(proyectoId, archivo)
+    reconocerUnaVez(proyectoId, archivo)
       .then((datos) => {
         if (!vivo) return
         setResultado(datos)

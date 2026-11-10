@@ -23,9 +23,10 @@ traduce: `type: [X, "null"]` -> `type: X` + `nullable`, se quitan
 `enum`. Un objeto sin `properties` lanza `ValueError` acá mismo (Gemini lo
 rechaza en tiempo de ejecución con un error poco claro).
 
-Errores: 429 (cuota) y 5xx (modelo saturado) se reintentan con backoff
-exponencial; si el modelo principal sigue saturado se prueba
-`GEMINI_FALLBACK_MODEL`. Agotados los intentos se lanza
+Errores: 429 (límite por minuto) pasa enseguida al siguiente modelo de
+`GEMINI_FALLBACK_MODEL` (lista separada por comas; cada modelo tiene su
+propia cuota); 5xx (modelo saturado) se reintenta con backoff exponencial;
+todo con un tope total de tiempo por llamada. Agotados los intentos se lanza
 `IANoDisponibleError` con un mensaje apto para mostrar al usuario. Una
 API key ausente también es `IANoDisponibleError`.
 """
@@ -45,6 +46,9 @@ logger = logging.getLogger(__name__)
 # Intentos por modelo y espera inicial del backoff (se duplica cada vez).
 REINTENTOS = 3
 ESPERA_INICIAL_SEGUNDOS = 1.5
+# Tope por llamada HTTP y tope total (todos los modelos y reintentos juntos).
+TIMEOUT_LLAMADA_SEGUNDOS = 45
+PRESUPUESTO_SEGUNDOS = 60
 
 MENSAJE_CUOTA = (
     "El servicio de IA (Gemini) alcanzó su límite de uso o está saturado en este momento. "
@@ -161,7 +165,9 @@ def _cliente():
     # se desactivan los del SDK para no multiplicar la espera.
     return genai.Client(
         api_key=settings.GEMINI_API_KEY,
-        http_options=types.HttpOptions(timeout=120_000, retry_options=types.HttpRetryOptions(attempts=1)),
+        http_options=types.HttpOptions(
+            timeout=int(TIMEOUT_LLAMADA_SEGUNDOS * 1000), retry_options=types.HttpRetryOptions(attempts=1)
+        ),
     )
 
 
@@ -170,37 +176,50 @@ def _es_reintentable(err: Exception) -> bool:
     return codigo in (408, 429, 500, 502, 503, 504)
 
 
-def _generar(modelo: str, contents, config):
-    """Llama a `generate_content` con backoff y modelo de respaldo."""
+def modelos_a_probar(modelo: str) -> list[str]:
+    """El pedido + los de respaldo (GEMINI_FALLBACK_MODEL admite varios
+    separados por coma), sin repetir."""
+    lista = [modelo] + [m.strip() for m in (settings.GEMINI_FALLBACK_MODEL or "").split(",") if m.strip()]
+    return list(dict.fromkeys(lista))
+
+
+def _generar(modelo: str, contents, config, presupuesto: float | None = None):
+    """Llama a `generate_content` probando los modelos en orden.
+
+    - 429 (límite por minuto de ESE modelo): se pasa enseguida al siguiente
+      modelo -- cada uno tiene su propia cuota, esperar no sirve de mucho.
+    - 5xx / red (modelo saturado): hasta REINTENTOS con backoff exponencial.
+    - 404 (modelo no disponible para la key): siguiente modelo.
+    - Tope total de PRESUPUESTO_SEGUNDOS: la interfaz nunca queda colgada.
+    """
     from google.genai import errors
 
     cliente = _cliente()
-    modelos = [modelo]
-    if settings.GEMINI_FALLBACK_MODEL and settings.GEMINI_FALLBACK_MODEL != modelo:
-        modelos.append(settings.GEMINI_FALLBACK_MODEL)
-
+    limite = time.monotonic() + (presupuesto or PRESUPUESTO_SEGUNDOS)
     ultimo: Exception | None = None
-    for m in modelos:
+    for m in modelos_a_probar(modelo):
         espera = ESPERA_INICIAL_SEGUNDOS
         for intento in range(REINTENTOS):
+            if time.monotonic() >= limite:
+                raise IANoDisponibleError(MENSAJE_CUOTA) from ultimo
             try:
                 return cliente.models.generate_content(model=m, contents=contents, config=config)
             except errors.APIError as err:
                 ultimo = err
+                codigo = getattr(err, "code", None)
+                if codigo == 404:
+                    break  # modelo inexistente para esta key -> siguiente
                 if not _es_reintentable(err):
-                    if getattr(err, "code", None) == 404:
-                        break  # modelo inexistente para esta key -> probar el de respaldo
-                    raise IANoDisponibleError(f"Gemini rechazó la solicitud ({err.code}).") from err
-                logger.warning("Gemini %s respondió %s (intento %d)", m, err.code, intento + 1)
-                if intento < REINTENTOS - 1:
-                    time.sleep(espera)
-                    espera *= 2
+                    raise IANoDisponibleError(f"Gemini rechazó la solicitud ({codigo}).") from err
+                logger.warning("Gemini %s respondió %s (intento %d)", m, codigo, intento + 1)
+                if codigo == 429:
+                    break  # cuota de este modelo agotada por ahora -> siguiente
             except Exception as err:  # red, timeout
                 ultimo = err
                 logger.warning("Error de red con Gemini %s: %s", m, err)
-                if intento < REINTENTOS - 1:
-                    time.sleep(espera)
-                    espera *= 2
+            if intento < REINTENTOS - 1 and time.monotonic() + espera < limite:
+                time.sleep(espera)
+                espera *= 2
     raise IANoDisponibleError(MENSAJE_CUOTA) from ultimo
 
 
@@ -285,7 +304,14 @@ def generate_json(system: str, texto: str, schema: dict, *, modelo: str | None =
 
 
 def image_to_diagram(
-    *, imagen: bytes, mime: str, system: str, prompt: str, schema: dict, modelo: str | None = None
+    *,
+    imagen: bytes,
+    mime: str,
+    system: str,
+    prompt: str,
+    schema: dict,
+    modelo: str | None = None,
+    presupuesto: float | None = None,
 ) -> dict:
     """Imagen + instrucción -> dict que respeta `schema` (salida JSON estructurada)."""
     from google.genai import types
@@ -302,7 +328,7 @@ def image_to_diagram(
             parts=[types.Part.from_bytes(data=imagen, mime_type=mime), types.Part.from_text(text=prompt)],
         )
     ]
-    respuesta = _generar(modelo or settings.GEMINI_VISION_MODEL, contents, config)
+    respuesta = _generar(modelo or settings.GEMINI_VISION_MODEL, contents, config, presupuesto)
     return _parsear_json(respuesta)
 
 

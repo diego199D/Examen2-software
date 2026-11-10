@@ -6,20 +6,47 @@ recibe el endpoint de confirmación (POST .../reconocimiento-foto/confirmar)
 -- el usuario puede revisar/editar ese JSON en el frontend antes de
 confirmarlo, mismo criterio que ya usa CU13 con `AccionVoz`."""
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from app.models.relacion import TipoRelacion
 from app.schemas.diagrama import DiagramaIO
+
+
+def _limpiar_miembro(datos, campo_tipo: str):
+    """El modelo de visión a veces copia la notación UML tal cual dentro del
+    nombre ("- nombre", "+ getTotal()", "edad: int"): se limpia en código
+    para no guardar un atributo llamado "- nombre"."""
+    if not isinstance(datos, dict) or not isinstance(datos.get("nombre"), str):
+        return datos
+    nombre = datos["nombre"].strip().lstrip("+-#~ ").strip()
+    if ":" in nombre:
+        nombre, _, tipo = nombre.partition(":")
+        if not datos.get(campo_tipo) and tipo.strip():
+            datos = {**datos, campo_tipo: tipo.strip()}
+        nombre = nombre.strip()
+    if nombre.endswith(")") and "(" in nombre:
+        nombre = nombre[: nombre.index("(")].strip()
+    return {**datos, "nombre": nombre or datos["nombre"].strip()}
 
 
 class AtributoDetectadoIO(BaseModel):
     nombre: str
     tipo: str | None = None
 
+    @model_validator(mode="before")
+    @classmethod
+    def _limpiar(cls, datos):
+        return _limpiar_miembro(datos, "tipo")
+
 
 class MetodoDetectadoIO(BaseModel):
     nombre: str
     tipo_retorno: str | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _limpiar(cls, datos):
+        return _limpiar_miembro(datos, "tipo_retorno")
 
 
 class ClaseDetectadaIO(BaseModel):

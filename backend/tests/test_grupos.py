@@ -85,3 +85,38 @@ def test_nombre_unico_dentro_del_grupo(client):
         "/auth/registro",
         json={"nombre_completo": "Ana", "email": "otra@g.com", "password": "clave12345", "nombre_grupo": "H"},
     ).status_code == 201
+
+
+def test_usuario_de_otro_grupo_no_accede_a_nada_de_un_proyecto_ajeno(client):
+    """Ningún endpoint de un proyecto deja pasar a alguien de otro grupo que
+    no es colaborador (lista, diagrama, IA, reportes, generación, colaboradores)."""
+    h_dueño = _registrar(client, "Duena", "Equipo A")
+    h_ajeno = _registrar(client, "Diego", "Equipo B")
+    p = client.post("/proyectos", json={"nombre": "Privado"}, headers=h_dueño).json()["id"]
+    client.put(
+        f"/proyectos/{p}/diagrama",
+        json={"clases": [{"id": "c", "nombre": "Cliente", "atributos": [], "metodos": []}], "relaciones": []},
+        headers=h_dueño,
+    )
+    assert client.get("/proyectos", headers=h_ajeno).json() == []
+    pedidos = [
+        ("get", f"/proyectos/{p}/diagrama", None),
+        ("put", f"/proyectos/{p}/diagrama", {"clases": [], "relaciones": []}),
+        ("put", f"/proyectos/{p}", {"nombre": "x"}),
+        ("delete", f"/proyectos/{p}", None),
+        ("get", f"/proyectos/{p}/colaboradores", None),
+        ("post", f"/proyectos/{p}/generar-backend", None),
+        ("post", f"/proyectos/{p}/generar-frontend", {"url_base": "http://localhost:8080"}),
+        ("get", f"/proyectos/{p}/reporte?formato=json", None),
+        ("post", f"/proyectos/{p}/comandos-voz", {"texto": "crea una clase X"}),
+        ("post", f"/proyectos/{p}/agente", {"mensaje": "hola", "historial": []}),
+        ("get", f"/usuarios/buscar?q=a&proyecto_id={p}", None),
+    ]
+    for metodo, url, cuerpo in pedidos:
+        kwargs = {"headers": h_ajeno}
+        if cuerpo is not None:
+            kwargs["json"] = cuerpo
+        resp = getattr(client, metodo)(url, **kwargs)
+        assert resp.status_code == 403, (metodo, url, resp.status_code)
+    # El diagrama del dueño sigue intacto.
+    assert len(client.get(f"/proyectos/{p}/diagrama", headers=h_dueño).json()["clases"]) == 1

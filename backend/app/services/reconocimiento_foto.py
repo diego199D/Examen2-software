@@ -150,6 +150,9 @@ logger = logging.getLogger(__name__)
 
 TIPOS_IMAGEN_PERMITIDOS = {"image/jpeg", "image/png", "image/webp"}
 TAMANIO_MAXIMO_BYTES = 10 * 1024 * 1024  # 10MB
+# Las verificaciones son opcionales (si fallan se usa la primera pasada):
+# tope corto para que la vista previa no tarde de más con Gemini saturado.
+PRESUPUESTO_VERIFICACION_SEGUNDOS = 25
 
 # Misma grilla que useDiagrama.ts/importador_xmi.py -- las clases nuevas no
 # se amontonan todas en el mismo punto, siguen la grilla desde donde queda
@@ -489,6 +492,7 @@ def _verificar_extremos_marcados(
             prompt=f"Relaciones a revisar: {json.dumps(lista, ensure_ascii=False)}",
             schema=_ESQUEMA_VERIFICACION_EXTREMOS,
             modelo=settings.GEMINI_VISION_MODEL,
+            presupuesto=PRESUPUESTO_VERIFICACION_SEGUNDOS,
         )
     except (IANoDisponibleError, IARespuestaInvalidaError, TypeError, KeyError):
         return [_SIN_VERIFICAR] * len(relaciones)
@@ -748,6 +752,7 @@ def _verificar_lineas(contenido: bytes, content_type: str, pares: list[tuple[str
             prompt=f"Pares a revisar: {json.dumps(lista, ensure_ascii=False)}",
             schema=_ESQUEMA_VERIFICACION_LINEAS,
             modelo=settings.GEMINI_VISION_MODEL,
+            presupuesto=PRESUPUESTO_VERIFICACION_SEGUNDOS,
         )
     except (IANoDisponibleError, IARespuestaInvalidaError, TypeError, KeyError):
         return [_LINEA_SIN_VERIFICAR] * len(pares)

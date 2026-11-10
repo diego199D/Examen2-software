@@ -16,7 +16,7 @@ Cuando la consigna era ambigua (o la especificación del docente no estaba en el
   - se quitan `additionalProperties` y `strict`;
   - se rechazan `oneOf`, `$ref` y los objetos sin `properties`;
   - se conserva el orden de las propiedades. Importa: en CU12 cada multiplicidad va junto a su clase.
-- Errores 429/5xx: hasta 3 reintentos con backoff exponencial y, si siguen, el modelo de respaldo. Después de eso, un mensaje claro para el usuario ("límite de uso… espera unos segundos").
+- Errores: un 429 (límite **por minuto** de ese modelo; se agotó en las pruebas intensivas) pasa enseguida al siguiente modelo de `GEMINI_FALLBACK_MODEL` (lista: `gemini-3.6-flash,gemini-3.5-flash-lite,gemini-3.1-flash-lite`; cada modelo tiene su propia cuota). Un 5xx (saturado) se reintenta con backoff. Cada llamada tiene un tope total de 60 s, y las dos verificaciones opcionales del reconocimiento por foto, de 25 s, así la interfaz nunca queda colgada. Si se agota todo, sale un mensaje claro ("límite de uso… espera unos segundos").
 - No hay `transcribe_audio`: la voz se reconoce en el navegador (Web Speech API) y al backend solo llega texto.
 
 ## 2. Relaciones y generador de backend
@@ -86,6 +86,10 @@ Otras decisiones del generador:
   - Se agregaron reglas explícitas al prompt: no modificar el diagrama ante preguntas teóricas; "la clase anterior" es la última mencionada en el chat; texto plano sin Markdown.
   - Hay una corrección determinística en código de la orientación todo/parte. En la primera medición, Gemini a veces dibujaba la composición al revés.
 - **Clase de asociación**: el Senior la usa cuando un N:M tiene atributos propios. Se verificó con "Estudiante–Curso con nota y fecha", que produjo `Inscripcion` como clase de asociación.
+
+## 4b. Sesión por pestaña
+
+- El token JWT se guarda en `sessionStorage` (uno por pestaña); `localStorage` solo recuerda el último login para que una pestaña nueva arranque con él. Antes vivía solo en `localStorage`, compartido por todas las pestañas: entrar como otro usuario en una pestaña cambiaba el token de las demás, que seguían mostrando su encabezado pero veían los proyectos del otro (bug reportado: "entro como diego y veo los proyectos del administrador"). El backend siempre filtró bien (test `test_usuario_de_otro_grupo_no_accede_a_nada_de_un_proyecto_ajeno`).
 
 ## 5. Backend generado (RF-BASE-08/09)
 

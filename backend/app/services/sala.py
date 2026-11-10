@@ -181,6 +181,7 @@ class Sala:
                 datos["propuesta"] = {"acciones": respuesta.acciones, "resumen": resultado.resumen, "estado": estado}
                 ejecutar = contexto.modo == "automatico"
 
+        await self.broadcast(evento("AI_TYPING", {"activo": False, "en_cola": self.cola.qsize()}))
         mensaje = await self._guardar_y_emitir(
             autor_nombre=senior.NOMBRE_SENIOR,
             tipo=TipoMensaje.SENIOR_AI,

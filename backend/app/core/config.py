@@ -21,8 +21,8 @@ class Settings(BaseSettings):
     GEMINI_MODEL: str = "gemini-3.5-flash"
     # Modelo para importar diagramas desde imagen (puede ser el mismo).
     GEMINI_VISION_MODEL: str = "gemini-3.5-flash"
-    # Respaldo si el principal responde 429/503 después de los reintentos.
-    GEMINI_FALLBACK_MODEL: str | None = "gemini-3.1-flash-lite"
+    # Respaldos en orden (separados por coma) si el principal responde 429/503.
+    GEMINI_FALLBACK_MODEL: str | None = "gemini-3.6-flash,gemini-3.5-flash-lite,gemini-3.1-flash-lite"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
