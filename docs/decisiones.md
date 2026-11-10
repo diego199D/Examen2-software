@@ -5,7 +5,7 @@ Cuando la consigna era ambigua (o la especificación del docente no estaba en el
 ## 0. Contexto
 
 - La especificación del docente (`docs/especificacion-parcial2.md`) **no estaba en el repositorio** cuando se hizo este trabajo. Las referencias a §6.1–§6.4 y a los escenarios §7 se resolvieron con lo que dice el prompt de trabajo. El esquema de eventos y la herramienta `apply_diagram_mutations` están definidos acá (secciones 3 y 4) y en `docs/documentacion-tecnica.md`.
-- El nombre del grupo **no es fijo en el código**. Cada usuario se registra con su nombre y el nombre de su grupo, y la interfaz muestra siempre el grupo de quien está logueado.
+- El nombre del grupo **no es fijo en el código** (y la documentación no lista integrantes). Cada usuario se registra con su nombre y el nombre de su grupo, y la interfaz muestra siempre el grupo de quien está logueado.
 
 ## 1. IA: Google Gemini
 

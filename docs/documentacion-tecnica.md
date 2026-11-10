@@ -2,12 +2,7 @@
 
 Plataforma colaborativa de diagramas de clases UML con un Desarrollador Senior de IA (Google Gemini).
 
-## Equipo
-
-- **Grupo:** `[NOMBRE_GRUPO]` ← completar
-- **Integrantes:** `[INTEGRANTE_1]`, `[INTEGRANTE_2]` ← completar
-
-En la aplicación el grupo no está fijo en el código. Cada usuario se registra con su nombre personal y el nombre de su grupo, y la interfaz muestra siempre el grupo de quien está conectado.
+El grupo no está fijo en el código: cada usuario se registra con su nombre personal y el nombre de su grupo, y la interfaz muestra siempre el grupo de quien está conectado.
 
 ## 1. Arquitectura
 
@@ -160,9 +155,10 @@ GEMINI_VISION_MODEL=gemini-3.5-flash       # importar diagramas desde imagen
 GEMINI_FALLBACK_MODEL=gemini-3.1-flash-lite  # respaldo si el principal responde 429/503
 ```
 
-- **Dónde va**:
-  - en desarrollo, en `backend/.env` (plantilla: `backend/.env.example`);
-  - con Docker, en `.env` de la raíz (plantilla: `.env.produccion.example`).
+- **Dónde va**: toda la configuración (key de Gemini, base de datos, JWT) vive en los `.env`:
+  - en desarrollo, en `backend/.env` (base `diagramador_parcial2` del contenedor `pg_diagramador_dev`, puerto 5433);
+  - con Docker, en `.env` de la raíz (base `diagramador_parcial2` del contenedor `db`).
+  - Plantillas: `backend/.env.example` y `.env.produccion.example`.
 - **Cliente único**: `backend/app/services/ai/gemini_client.py`, con `chat_with_tools`, `parse_command`, `image_to_diagram`, `generate_json` y `generate_text`.
 - **Errores 429 y 5xx**: hasta 3 reintentos con backoff exponencial y luego el modelo de respaldo. Si sigue fallando, muestra un mensaje claro en el chat o en la interfaz.
 
