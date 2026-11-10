@@ -265,6 +265,16 @@ export function RelacionEdge({
   selected,
 }: EdgeProps<EdgeData>) {
   const extremos = useStore(selectorExtremos(id, source, target), extremosIguales)
+  // Clase de asociación (N:M con atributos propios): línea punteada desde su
+  // centro hasta el punto medio de la relación -- notación UML estándar. El
+  // selector devuelve un string para que solo se redibuje si esa clase se mueve.
+  const centroAsociacion = useStore((store: ReactFlowState) => {
+    const idClase = data?.id_clase_asociacion
+    const nodo = idClase ? store.nodeInternals.get(idClase) : undefined
+    if (!nodo || !medido(nodo)) return ''
+    const c = centroDe(nodo)
+    return `${c.x},${c.y}`
+  })
   const moverPunto = useContext(AccionesRelacionContext)
   const { screenToFlowPosition } = useReactFlow()
   // Durante el arrastre: diferencia entre donde se agarró el punto y su
@@ -317,6 +327,16 @@ export function RelacionEdge({
   return (
     <>
       <BaseEdge id={id} path={trazado.path} markerStart={markerStart} markerEnd={markerEnd} style={style} />
+      {centroAsociacion && (
+        <path
+          className="edge-clase-asociacion"
+          d={`M ${centroAsociacion.replace(',', ' ')} L ${trazado.control.x} ${trazado.control.y}`}
+          fill="none"
+          stroke="#4a5261"
+          strokeWidth={1.25}
+          strokeDasharray="6 4"
+        />
+      )}
       <EdgeLabelRenderer>
         {data?.multiplicidad_origen && (
           <div

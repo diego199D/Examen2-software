@@ -100,12 +100,15 @@ function ItemMenu({ icon, children, disabled, title, onClick }: ItemMenuProps) {
   )
 }
 
-export type FormatoReporte = 'pdf' | 'imagen' | 'xmi'
+export type FormatoReporte = 'pdf' | 'imagen' | 'svg' | 'xmi' | 'ddl' | 'json'
 
 const ETIQUETA_FORMATO: Record<FormatoReporte, string> = {
   pdf: 'PDF',
-  imagen: 'Imagen',
+  imagen: 'Imagen PNG',
+  svg: 'Imagen SVG',
   xmi: 'XMI',
+  ddl: 'DDL (SQL)',
+  json: 'JSON',
 }
 
 export type MenuArchivoProps = {
@@ -244,7 +247,7 @@ export function MenuArchivo({
               </button>
               {submenuReporteAbierto && (
                 <div className="menu-archivo__submenu" role="menu">
-                  {(['pdf', 'imagen', 'xmi'] as FormatoReporte[]).map((formato) => (
+                  {(['pdf', 'imagen', 'svg', 'xmi', 'ddl', 'json'] as FormatoReporte[]).map((formato) => (
                     <button
                       key={formato}
                       type="button"

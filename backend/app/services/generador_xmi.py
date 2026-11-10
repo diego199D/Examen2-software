@@ -214,6 +214,7 @@ def _lower_upper(multiplicidad: str | None) -> tuple[str, str] | None:
     return {
         "1": ("1", "1"),
         "0..1": ("0", "1"),
+        "*": ("0", "*"),
         "0..*": ("0", "*"),
         "1..*": ("1", "*"),
     }.get(multiplicidad)

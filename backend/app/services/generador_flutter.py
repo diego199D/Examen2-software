@@ -159,9 +159,9 @@ from app.services.generador_spring import (
     nombre_campo_java,
     nombre_clase_java,
     pluralizar,
-    resolver_nombres_relaciones,
     slug_paquete,
 )
+from app.services.modelo_relacional import ModeloRelacional, construir_modelo
 
 # --------------------------------------------------------------------------
 # Mapeo de tipos UML (texto libre en Atributo.tipo) a tipos Dart. Mismo
@@ -273,90 +273,38 @@ def _es_plural(multiplicidad: str | None) -> bool:
     return multiplicidad in MULTIPLICIDADES_PLURALES
 
 
-def _propietario_relacion(
-    r: Relacion, clases_por_id: dict[str, ClaseUml]
-) -> tuple[ClaseUml, ClaseUml] | None:
-    """Determina qué lado de la relación guarda la referencia escalar por
-    id, con el mismo criterio que decide quién tiene la FK (`@ManyToOne`/
-    `@OneToOne` dueño) en generador_spring.py:
-    - 1 a 1: el origen es el dueño.
-    - 1 a muchos / muchos a 1: el lado "muchos" es el dueño.
-    - muchos a muchos: ningún lado tiene una FK escalar simple — se
-      devuelve None (ver limitación en el encabezado del módulo).
-
-    Devuelve (clase_propietaria, clase_referenciada), o None.
-    """
-    origen = clases_por_id.get(r.id_clase_origen)
-    destino = clases_por_id.get(r.id_clase_destino)
-    if origen is None or destino is None:
-        return None  # payload inconsistente — ya se valida al guardar el diagrama (CU09)
-
-    origen_plural = _es_plural(r.multiplicidad_origen)
-    destino_plural = _es_plural(r.multiplicidad_destino)
-
-    if not origen_plural and not destino_plural:
-        return origen, destino
-    if not origen_plural and destino_plural:
-        return destino, origen
-    if origen_plural and not destino_plural:
-        return origen, destino
-    return None  # muchos a muchos
-
-
-def _procesar_relaciones(
-    clases: list[ClaseUml], relaciones: list[Relacion]
-) -> dict[str, list[CampoRelacion]]:
-    clases_por_id = {c.id: c for c in clases}
-    campos_por_clase: dict[str, list[CampoRelacion]] = {c.id: [] for c in clases}
-    # Mismo resolver que usa generador_spring.py para el lado Java: si hay
-    # más de una relación entre el mismo par de clases, el nombre de campo
-    # (y por lo tanto la clave JSON) tiene que numerarse exactamente igual
-    # en los dos generadores — ver encabezado del módulo.
-    nombres_relaciones = resolver_nombres_relaciones(clases, relaciones)
-
-    for r in relaciones:
-        propietario = _propietario_relacion(r, clases_por_id)
-        if propietario is None:
-            continue  # muchos a muchos
-        dueño, referenciada = propietario
-        nombres = nombres_relaciones.get(r.id)
-        if nombres is None:
-            continue  # payload inconsistente — ya se valida al guardar el diagrama (CU09)
-
-        nombre_dart_referenciada = nombre_clase_java(referenciada.nombre)
-        campos_por_clase[dueño.id].append(
-            CampoRelacion(
-                nombre_campo=nombres.dueño + "Id",
-                nombre_base=nombres.dueño,
-                nombre_json=nombres.dueño,
-                clase_relacionada=nombre_dart_referenciada,
-                archivo_relacionado=a_snake_case(nombre_dart_referenciada),
-                etiqueta=nombre_dart_referenciada,
+def _procesar_relaciones(modelo: ModeloRelacional) -> dict[str, list[CampoRelacion]]:
+    """Un campo de referencia por cada FK que guarda la clase (incluidas las
+    heredadas) — exactamente las mismas FKs y nombres que el backend Spring
+    (`modelo_relacional.py`): N:M sin clase de asociación no generan campo;
+    con clase de asociación, la clase intermedia recibe sus dos referencias."""
+    campos_por_clase: dict[str, list[CampoRelacion]] = {i: [] for i in modelo.entidades}
+    for id_clase in modelo.entidades:
+        for k in modelo.claves_de(id_clase, heredadas=True):
+            nombre_dart_referenciada = modelo.entidades[k.id_referida].nombre_java
+            campos_por_clase[id_clase].append(
+                CampoRelacion(
+                    nombre_campo=k.campo + "Id",
+                    nombre_base=k.campo,
+                    nombre_json=k.campo,
+                    clase_relacionada=nombre_dart_referenciada,
+                    archivo_relacionado=a_snake_case(nombre_dart_referenciada),
+                    etiqueta=nombre_dart_referenciada,
+                )
             )
-        )
-
     return campos_por_clase
 
 
-def _orden_topologico(
-    clases_datos: list[DatosClase], clases: list[ClaseUml], relaciones: list[Relacion]
-) -> list[DatosClase]:
+def _orden_topologico(clases_datos: list[DatosClase], modelo: ModeloRelacional) -> list[DatosClase]:
     """CU14 — orden en el que `sync_manager.dart` sincroniza cada tabla: las
-    clases referenciadas ("uno") antes que las que las referencian
-    ("muchos", dueñas de la FK) — mismo criterio `_propietario_relacion` de
-    arriba. Un ciclo real entre clases cae al orden de declaración original
-    para lo que quede sin resolver (limitación documentada en el
-    encabezado del módulo)."""
-    clases_por_id = {c.id: c for c in clases}
-
+    clases referenciadas antes que las que guardan la FK. Un ciclo real
+    entre clases cae al orden de declaración original para lo que quede sin
+    resolver (limitación documentada en el encabezado del módulo)."""
     dependencias: dict[str, set[str]] = {d.clase.id: set() for d in clases_datos}
-    for r in relaciones:
-        propietario = _propietario_relacion(r, clases_por_id)
-        if propietario is None:
-            continue
-        dueño, referenciada = propietario
-        if dueño.id in dependencias and referenciada.id in dependencias:
-            dependencias[dueño.id].add(referenciada.id)
+    for d in clases_datos:
+        for k in modelo.claves_de(d.clase.id, heredadas=True):
+            if k.id_referida in dependencias and k.id_referida != d.clase.id:
+                dependencias[d.clase.id].add(k.id_referida)
 
     resueltos: list[DatosClase] = []
     resueltos_ids: set[str] = set()
@@ -2229,24 +2177,25 @@ def generar_zip_frontend(
     proyecto: Proyecto, clases: list[ClaseUml], relaciones: list[Relacion], url_base: str
 ) -> bytes:
     slug = slug_paquete(proyecto.nombre)
-    campos_relacion_por_clase = _procesar_relaciones(clases, relaciones)
+    modelo = construir_modelo(clases, relaciones)
+    campos_relacion_por_clase = _procesar_relaciones(modelo)
 
     clases_datos: list[DatosClase] = []
     for c in clases:
         nombre_dart = nombre_clase_java(c.nombre)
+        # Mismos atributos que la entidad JPA (incluidos los heredados, sin
+        # "id" ni los que pisa una columna FK) -- ver modelo_relacional.py.
         atributos = [
             CampoAtributo(
-                nombre_campo=nombre_campo_java(a.nombre),
-                tipo_dart=mapear_tipo_dart(a.tipo),
+                nombre_campo=a.nombre_campo,
+                tipo_dart=mapear_tipo_dart(a.tipo_uml),
                 aviso=(
-                    f'tipo UML "{a.tipo}" no reconocido, se usó String por defecto'
-                    if tipo_no_reconocido(a.tipo)
+                    f'tipo UML "{a.tipo_uml}" no reconocido, se usó String por defecto'
+                    if tipo_no_reconocido(a.tipo_uml)
                     else None
                 ),
             )
-            for a in sorted(c.atributos, key=lambda a: a.orden)
-            # El modelo ya tiene su propio `int? id` — mismo criterio que CU08.
-            if nombre_campo_java(a.nombre).lower() != "id"
+            for a in modelo.atributos_totales(c.id)
         ]
         clases_datos.append(
             DatosClase(
@@ -2260,7 +2209,7 @@ def generar_zip_frontend(
         )
 
     # CU14 — orden de sincronización entre clases (padres antes que hijos).
-    clases_ordenadas = _orden_topologico(clases_datos, clases, relaciones)
+    clases_ordenadas = _orden_topologico(clases_datos, modelo)
 
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zf:

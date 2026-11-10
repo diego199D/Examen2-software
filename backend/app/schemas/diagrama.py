@@ -56,6 +56,9 @@ class RelacionIO(BaseModel):
     forma: Literal["RECTA", "L", "CURVA"] | None = None
     desvio_x: float | None = None
     desvio_y: float | None = None
+    # N:M -- ver `app/models/relacion.py`.
+    id_clase_asociacion: str | None = None
+    tabla_intermedia: str | None = Field(default=None, max_length=63)
 
 
 class DiagramaIO(BaseModel):

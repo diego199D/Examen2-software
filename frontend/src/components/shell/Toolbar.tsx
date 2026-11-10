@@ -1,12 +1,12 @@
 import { useRef, useState } from 'react'
 import type { ChangeEvent, CSSProperties, ReactNode } from 'react'
-import { toPng } from 'html-to-image'
+import { toPng, toSvg } from 'html-to-image'
 import { getNodesBounds, getViewportForBounds, useReactFlow } from 'reactflow'
 import { Link, useNavigate } from 'react-router-dom'
 
 import { importarDiagramaXmi } from '../../api/diagrama'
 import { descargarArchivo, generarBackend } from '../../api/generacion'
-import { generarReportePdf, generarReporteXmi } from '../../api/reportes'
+import { generarReporte, generarReportePdf, generarReporteXmi } from '../../api/reportes'
 import { getApiErrorMessage } from '../../api/errors'
 import type { DiagramaData, Proyecto } from '../../api/types'
 import { useAuth } from '../../auth/useAuth'
@@ -330,6 +330,9 @@ export function Toolbar({
         const generar = formato === 'pdf' ? generarReportePdf : generarReporteXmi
         const { blob, nombreArchivo } = await generar(project.id)
         descargarArchivo(blob, nombreArchivo)
+      } else if (formato === 'ddl' || formato === 'json') {
+        const { blob, nombreArchivo } = await generarReporte(project.id, formato)
+        descargarArchivo(blob, nombreArchivo)
       } else {
         const viewportEl = document.querySelector('.react-flow__viewport') as HTMLElement | null
         if (!viewportEl) throw new Error('No se pudo capturar el lienzo')
@@ -352,7 +355,8 @@ export function Toolbar({
         if (marcadoresClon) viewportEl.appendChild(marcadoresClon)
 
         try {
-          const dataUrl = await toPng(viewportEl, {
+          const capturar = formato === 'svg' ? toSvg : toPng
+          const dataUrl = await capturar(viewportEl, {
             backgroundColor: '#ffffff',
             width: ancho,
             height: alto,
@@ -362,7 +366,10 @@ export function Toolbar({
               transform: `translate(${viewport.x}px, ${viewport.y}px) scale(${viewport.zoom})`,
             },
           })
-          descargarDataUrl(dataUrl, `${slugNombreArchivo(project.nombre)}-reporte.png`)
+          descargarDataUrl(
+            dataUrl,
+            `${slugNombreArchivo(project.nombre)}-reporte.${formato === 'svg' ? 'svg' : 'png'}`,
+          )
         } finally {
           marcadoresClon?.remove()
         }

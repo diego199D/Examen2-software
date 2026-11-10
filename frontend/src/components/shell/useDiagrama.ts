@@ -18,6 +18,8 @@ export type EdgeData = {
   forma: FormaRelacion | null
   desvio_x: number | null
   desvio_y: number | null
+  id_clase_asociacion?: string | null
+  tabla_intermedia?: string | null
 }
 
 export type DetallesRelacion = {
@@ -26,6 +28,8 @@ export type DetallesRelacion = {
   multiplicidad_origen: string | null
   multiplicidad_destino: string | null
   forma: FormaRelacion | null
+  id_clase_asociacion?: string | null
+  tabla_intermedia?: string | null
 }
 
 export type Desvio = { x: number; y: number }
@@ -137,6 +141,8 @@ function construirArista(r: RelacionUml, posicionesPorId: Map<string, PosicionXY
       forma: r.forma ?? null,
       desvio_x: r.desvio_x ?? null,
       desvio_y: r.desvio_y ?? null,
+      id_clase_asociacion: r.id_clase_asociacion ?? null,
+      tabla_intermedia: r.tabla_intermedia ?? null,
     },
     ...markerDeRelacion(r.tipo),
   }
@@ -275,6 +281,13 @@ function serializar(nodes: Node<ClassNodeData>[], edges: Edge<EdgeData>[]): Diag
         forma: e.data?.forma ?? null,
         desvio_x: e.data?.desvio_x ?? null,
         desvio_y: e.data?.desvio_y ?? null,
+        // Una clase de asociación que ya no existe se descarta (el backend
+        // también lo hace, pero así no viaja un id colgado).
+        id_clase_asociacion:
+          e.data?.id_clase_asociacion && idsClasesValidas.has(e.data.id_clase_asociacion)
+            ? e.data.id_clase_asociacion
+            : null,
+        tabla_intermedia: e.data?.tabla_intermedia ?? null,
       })),
   }
 }

@@ -9,7 +9,9 @@ from app.db.session import get_db
 from app.models.usuario import Usuario
 from app.routers.auth import get_current_user
 from app.services.acceso import obtener_proyecto_propio
-from app.services.diagrama import cargar_clases_y_relaciones
+from app.services.diagrama import cargar_clases_y_relaciones, cargar_diagrama
+from app.services.generador_ddl import generar_ddl
+from app.services.modelo_relacional import construir_modelo
 from app.services.generador_reporte import generar_pdf_reporte
 from app.services.generador_spring import slug_paquete
 from app.services.generador_xmi import generar_xmi_reporte
@@ -19,13 +21,16 @@ router = APIRouter(prefix="/proyectos/{proyecto_id}", tags=["reportes"])
 _MEDIA_TYPE_POR_FORMATO = {
     "pdf": "application/pdf",
     "xmi": "application/xml",
+    "ddl": "application/sql",
+    "json": "application/json",
 }
+_EXTENSION_POR_FORMATO = {"pdf": "pdf", "xmi": "xmi", "ddl": "sql", "json": "json"}
 
 
 @router.get("/reporte")
 def obtener_reporte(
     proyecto_id: int,
-    formato: Literal["pdf", "xmi"] = Query("pdf"),
+    formato: Literal["pdf", "xmi", "ddl", "json"] = Query("pdf"),
     usuario_actual: Usuario = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> StreamingResponse:
@@ -46,9 +51,14 @@ def obtener_reporte(
 
     if formato == "pdf":
         contenido = generar_pdf_reporte(proyecto, clases, relaciones)
-    else:
+    elif formato == "xmi":
         contenido = generar_xmi_reporte(proyecto, clases, relaciones)
-    nombre_archivo = f"{slug_paquete(proyecto.nombre)}-reporte.{formato}"
+    elif formato == "ddl":
+        # Mismo script que la migración Flyway del backend generado (CU08).
+        contenido = generar_ddl(proyecto.nombre, construir_modelo(clases, relaciones)).encode("utf-8")
+    else:
+        contenido = cargar_diagrama(proyecto_id, db).model_dump_json(indent=2).encode("utf-8")
+    nombre_archivo = f"{slug_paquete(proyecto.nombre)}-reporte.{_EXTENSION_POR_FORMATO[formato]}"
 
     return StreamingResponse(
         io.BytesIO(contenido),

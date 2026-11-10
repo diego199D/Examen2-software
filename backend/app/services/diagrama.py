@@ -1,3 +1,5 @@
+import re
+
 from fastapi import HTTPException, status
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
@@ -9,7 +11,10 @@ from app.models.relacion import Relacion
 from app.schemas.diagrama import DiagramaIO
 
 # Deben coincidir con OPCIONES_MULTIPLICIDAD en el frontend (umlFormat.ts).
-MULTIPLICIDADES_VALIDAS = {"1", "0..1", "0..*", "1..*"}
+# "*" (segundo parcial) es la notación corta de "0..*" -- muchos.
+MULTIPLICIDADES_VALIDAS = {"1", "0..1", "*", "0..*", "1..*"}
+MULTIPLICIDADES_PLURALES = {"*", "0..*", "1..*"}
+_NOMBRE_TABLA_VALIDO = re.compile(r"^[a-z_][a-z0-9_]{0,62}$")
 
 
 def validar_diagrama(datos: DiagramaIO) -> None:
@@ -37,6 +42,25 @@ def validar_diagrama(datos: DiagramaIO) -> None:
                     detail=(
                         f"Multiplicidad inválida: '{multiplicidad}'. "
                         f"Debe ser una de {sorted(MULTIPLICIDADES_VALIDAS)} o no especificarse."
+                    ),
+                )
+        # Clase de asociación: tolerante a propósito (en edición colaborativa
+        # alguien puede borrar la clase mientras otro guarda la relación): si
+        # ya no está en el diagrama o es uno de los propios extremos, se
+        # descarta el vínculo en vez de rechazar todo el guardado.
+        if r.id_clase_asociacion is not None and (
+            r.id_clase_asociacion not in ids_clases
+            or r.id_clase_asociacion in (r.id_clase_origen, r.id_clase_destino)
+        ):
+            r.id_clase_asociacion = None
+        if r.tabla_intermedia is not None:
+            r.tabla_intermedia = r.tabla_intermedia.strip().lower() or None
+            if r.tabla_intermedia is not None and not _NOMBRE_TABLA_VALIDO.match(r.tabla_intermedia):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=(
+                        f"Nombre de tabla intermedia inválido: '{r.tabla_intermedia}'. "
+                        "Solo minúsculas, dígitos y guion bajo, empezando por letra."
                     ),
                 )
 

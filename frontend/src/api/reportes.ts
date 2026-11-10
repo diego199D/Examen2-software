@@ -73,3 +73,36 @@ export async function generarReporteXmi(proyectoId: number): Promise<ReportePdf>
     throw err
   }
 }
+
+/**
+ * Segundo parcial — DDL (mismo SQL que la migración del backend generado) y
+ * JSON del diagrama. Mismo endpoint y manejo de error que los anteriores.
+ */
+export async function generarReporte(proyectoId: number, formato: 'ddl' | 'json'): Promise<ReportePdf> {
+  const extension = formato === 'ddl' ? 'sql' : 'json'
+  try {
+    const resp = await api.get(`/proyectos/${proyectoId}/reporte`, {
+      params: { formato },
+      responseType: 'blob',
+    })
+    return {
+      blob: resp.data as Blob,
+      nombreArchivo: nombreDesdeContentDisposition(
+        resp.headers['content-disposition'],
+        `reporte-${proyectoId}.${extension}`,
+      ),
+    }
+  } catch (err) {
+    if (axios.isAxiosError(err) && err.response?.data instanceof Blob) {
+      const texto = await err.response.data.text()
+      let detalle: string | undefined
+      try {
+        detalle = (JSON.parse(texto) as { detail?: string }).detail
+      } catch {
+        /* el cuerpo del error no era JSON */
+      }
+      if (detalle) throw new Error(detalle)
+    }
+    throw err
+  }
+}

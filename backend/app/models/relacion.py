@@ -40,6 +40,16 @@ class Relacion(Base):
     forma: Mapped[str | None] = mapped_column(String(10), nullable=True)
     desvio_x: Mapped[float | None] = mapped_column(Float, nullable=True)
     desvio_y: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # Segundo parcial (N:M). Clase de asociación: una clase del mismo
+    # diagrama que guarda los atributos propios del vínculo (ej. `Matricula`
+    # con nota/fecha entre Estudiante *--* Curso). El generador la convierte
+    # en la tabla intermedia. Ver docs/decisiones.md.
+    id_clase_asociacion: Mapped[str | None] = mapped_column(
+        ForeignKey("clases_uml.id", ondelete="SET NULL"), nullable=True
+    )
+    # Nombre opcional de la tabla intermedia de un N:M sin clase de
+    # asociación (si no se da: `tablaA_tablaB` en orden alfabético).
+    tabla_intermedia: Mapped[str | None] = mapped_column(String(63), nullable=True)
 
     origen = relationship("ClaseUml", foreign_keys=[id_clase_origen])
     destino = relationship("ClaseUml", foreign_keys=[id_clase_destino])

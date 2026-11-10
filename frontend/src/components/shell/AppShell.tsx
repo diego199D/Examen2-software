@@ -46,6 +46,13 @@ export function AppShell({ project }: { project: Proyecto }) {
     setModal({ tipo: 'relacion-nueva', conexion })
   }
 
+  // Clases que pueden ser "clase de asociación" de una relación: cualquiera
+  // del diagrama salvo sus propios extremos.
+  const clasesCandidatas = (origen: string | null, destino: string | null) =>
+    diagrama.nodes
+      .filter((n) => n.id !== origen && n.id !== destino && n.data.clase.nombre.trim())
+      .map((n) => ({ id: n.id, nombre: n.data.clase.nombre }))
+
   return (
     <ReactFlowProvider>
       <div
@@ -103,6 +110,7 @@ export function AppShell({ project }: { project: Proyecto }) {
         <RelacionEditorModal
           titulo="Nueva relación"
           valorInicial={RELACION_DEFAULT}
+          clasesCandidatas={clasesCandidatas(modal.conexion.source, modal.conexion.target)}
           onClose={cerrarModal}
           onGuardar={(detalles) => diagrama.crearRelacion(modal.conexion, detalles)}
         />
@@ -112,6 +120,7 @@ export function AppShell({ project }: { project: Proyecto }) {
         <RelacionEditorModal
           titulo="Editar relación"
           valorInicial={modal.edge.data ?? RELACION_DEFAULT}
+          clasesCandidatas={clasesCandidatas(modal.edge.source, modal.edge.target)}
           onClose={cerrarModal}
           onGuardar={(detalles, invertir) => diagrama.actualizarRelacion(modal.edge.id, detalles, invertir)}
           onEliminar={() => diagrama.eliminarRelacion(modal.edge.id)}

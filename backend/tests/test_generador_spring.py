@@ -66,14 +66,21 @@ def test_generar_backend_con_relacion_singular_plural(client, crear_usuario, cre
     direccion_java = next(n for n in nombres if n.endswith("model/Direccion.java"))
     contenido_direccion = zf.read(direccion_java).decode("utf-8")
     assert "@ManyToOne" in contenido_direccion
-    assert '@JoinColumn(name = "persona_id")' in contenido_direccion
+    assert '@JoinColumn(name = "persona_id"' in contenido_direccion
     assert "private Persona persona;" in contenido_direccion
+    # Multiplicidad "1" del lado Persona -> FK obligatoria.
+    assert "nullable = false" in contenido_direccion
+    # La FK anidada no arrastra las relaciones de Persona (sin recursión JSON).
+    assert '@JsonIgnoreProperties({"hibernateLazyInitializer", "handler", "direcciones"})' in contenido_direccion
 
     # Persona es el lado "uno" -> inverso, @OneToMany(mappedBy = "persona").
     persona_java = next(n for n in nombres if n.endswith("model/Persona.java"))
     contenido_persona = zf.read(persona_java).decode("utf-8")
     assert '@OneToMany(mappedBy = "persona")' in contenido_persona
-    assert "private List<Direccion> direccionList;" in contenido_persona
+    assert "private List<Direccion> direcciones = new ArrayList<>();" in contenido_persona
+    # Colección inversa fuera del JSON: antes la bidireccional entraba en
+    # recursión infinita al serializar.
+    assert "@JsonIgnore\n    private List<Direccion> direcciones" in contenido_persona
 
     # El endpoint del controller REST sigue /api/{plural minúscula}.
     controller_direccion = next(n for n in nombres if n.endswith("controller/DireccionController.java"))
@@ -118,8 +125,8 @@ def test_etiqueta_de_relacion_no_se_usa_como_nombre_de_campo(client, crear_usuar
     # según la etiqueta ("direcciones") — @Table(name = "direcciones") sí es
     # correcto (nombre de tabla pluralizado de la propia clase Direccion).
     assert "private Persona persona;" in contenido
-    assert '@JoinColumn(name = "persona_id")' in contenido
-    assert '@JoinColumn(name = "direcciones_id")' not in contenido
+    assert '@JoinColumn(name = "persona_id"' in contenido
+    assert '@JoinColumn(name = "direcciones_id"' not in contenido
     assert "private Persona direcciones;" not in contenido
 
 
@@ -162,8 +169,8 @@ def test_dos_relaciones_al_mismo_par_de_clases_no_duplican_columna(
     zf = zipfile.ZipFile(io.BytesIO(resp.content))
     libro_java = zf.read(next(n for n in zf.namelist() if n.endswith("model/Libro.java"))).decode("utf-8")
 
-    assert libro_java.count('@JoinColumn(name = "miembro_id")') == 1
-    assert '@JoinColumn(name = "miembro2_id")' in libro_java
+    assert libro_java.count('@JoinColumn(name = "miembro_id"') == 1
+    assert '@JoinColumn(name = "miembro2_id"' in libro_java
     assert "private Miembro miembro;" in libro_java
     assert "private Miembro miembro2;" in libro_java
 
@@ -187,7 +194,10 @@ def test_generar_backend_usa_h2_sin_placeholders_activos(client, crear_usuario, 
     contenido = zf.read(props_path).decode("utf-8")
 
     assert "jdbc:h2:mem:" in contenido
-    assert "spring.datasource.username=sa" in contenido
+    assert "spring.datasource.username=${SPRING_DATASOURCE_USERNAME:sa}" in contenido
+    # El esquema lo crea Flyway (PK/FK/índices exactos), no Hibernate.
+    assert "spring.jpa.hibernate.ddl-auto=none" in contenido
+    assert any(n.endswith("db/migration/V1__esquema_inicial.sql") for n in zf.namelist())
 
     # Ninguna línea ACTIVA (no comentada) debe seguir pidiendo completar
     # placeholders de Postgres -- solo puede aparecer dentro del bloque
@@ -201,7 +211,7 @@ def test_generar_backend_usa_h2_sin_placeholders_activos(client, crear_usuario, 
     assert "<artifactId>postgresql</artifactId>" in contenido_pom  # se mantiene disponible
 
 
-def test_generar_backend_incluye_readme_con_endpoints(client, crear_usuario, crear_proyecto, headers, db_session):
+def test_generar_backend_incluye_readme_corto(client, crear_usuario, crear_proyecto, headers, db_session):
     admin = crear_usuario()
     proyecto = crear_proyecto(admin)
     _crear_diagrama_persona_direccion(db_session, proyecto)
@@ -213,13 +223,14 @@ def test_generar_backend_incluye_readme_con_endpoints(client, crear_usuario, cre
     readme_path = next(n for n in zf.namelist() if n.endswith("README.md"))
     contenido = zf.read(readme_path).decode("utf-8")
 
+    assert "docker compose up" in contenido
     assert "mvn spring-boot:run" in contenido
     assert "Java 17" in contenido
     assert "8080" in contenido
-    assert "/api/personas" in contenido
-    assert "/api/direcciones" in contenido
-    assert "JWT" in contenido
+    assert "swagger-ui" in contenido
+    assert "postman_collection.json" in contenido
     assert "CORS" in contenido
+    assert len([l for l in contenido.splitlines() if l.strip()]) <= 6  # título + 5 líneas
 
 
 def test_generar_backend_incluye_cors_config_valido(client, crear_usuario, crear_proyecto, headers, db_session):
@@ -331,7 +342,9 @@ def test_atributo_llamado_id_no_duplica_el_campo_autogenerado(
     ocurrencias_campo_id = re.findall(r"private \w+(?:<\w+>)? id;", contenido)
     assert len(ocurrencias_campo_id) == 1
     assert "private String id;" not in contenido
-    assert contenido.count("@Column") == 1  # solo "titulo"; "id" no generó @Column
+    # Solo el @Id y "titulo"; el atributo "id" del diagrama no generó @Column.
+    assert contenido.count("@Column") == 2
+    assert '@Column(name = "titulo")' in contenido
 
 
 # --------------------------------------------------------------------------

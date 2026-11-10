@@ -103,6 +103,10 @@ export type RelacionUml = {
   forma?: FormaRelacion | null
   desvio_x?: number | null
   desvio_y?: number | null
+  // N:M (segundo parcial): clase de asociación (sus atributos son los del
+  // vínculo) y nombre opcional de la tabla intermedia generada.
+  id_clase_asociacion?: string | null
+  tabla_intermedia?: string | null
 }
 
 export type FormaRelacion = 'RECTA' | 'L' | 'CURVA'

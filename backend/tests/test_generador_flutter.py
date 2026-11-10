@@ -270,8 +270,8 @@ def test_dos_relaciones_al_mismo_par_de_clases_flutter_coincide_con_spring(
     # deben ser distintas (si no, Hibernate no arranca).
     assert "private Miembro miembro;" in libro_java
     assert "private Miembro miembro2;" in libro_java
-    assert '@JoinColumn(name = "miembro_id")' in libro_java
-    assert '@JoinColumn(name = "miembro2_id")' in libro_java
+    assert '@JoinColumn(name = "miembro_id"' in libro_java
+    assert '@JoinColumn(name = "miembro2_id"' in libro_java
 
     # Las mismas dos claves JSON ("miembro" / "miembro2") tienen que
     # aparecer en el modelo Dart, empaquetando/desempaquetando el id.

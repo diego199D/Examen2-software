@@ -12,21 +12,39 @@ import { OPCIONES_FORMA_RELACION, OPCIONES_MULTIPLICIDAD, OPCIONES_TIPO_RELACION
 type Props = {
   titulo: string
   valorInicial: DetallesRelacion
+  /** Clases elegibles como clase de asociación (todas menos los extremos). */
+  clasesCandidatas?: { id: string; nombre: string }[]
   onClose: () => void
   onGuardar: (detalles: DetallesRelacion, invertir: boolean) => void
   onEliminar?: () => void
 }
 
-export function RelacionEditorModal({ titulo, valorInicial, onClose, onGuardar, onEliminar }: Props) {
+const PLURALES = new Set(['*', '0..*', '1..*'])
+
+export function RelacionEditorModal({
+  titulo,
+  valorInicial,
+  clasesCandidatas = [],
+  onClose,
+  onGuardar,
+  onEliminar,
+}: Props) {
   const [tipo, setTipo] = useState<TipoRelacion>(valorInicial.tipo)
   const [etiqueta, setEtiqueta] = useState(valorInicial.etiqueta ?? '')
   const [multOrigen, setMultOrigen] = useState(valorInicial.multiplicidad_origen ?? '')
   const [multDestino, setMultDestino] = useState(valorInicial.multiplicidad_destino ?? '')
   const [forma, setForma] = useState<FormaRelacion>(valorInicial.forma ?? 'RECTA')
   const [invertida, setInvertida] = useState(false)
+  const [claseAsociacion, setClaseAsociacion] = useState(valorInicial.id_clase_asociacion ?? '')
+  const [tablaIntermedia, setTablaIntermedia] = useState(valorInicial.tabla_intermedia ?? '')
+
+  const esMuchosAMuchos = PLURALES.has(multOrigen) && PLURALES.has(multDestino)
+  const admiteAsociacion = tipo !== 'HERENCIA'
+  const tablaValida = !tablaIntermedia.trim() || /^[a-z_][a-z0-9_]{0,62}$/.test(tablaIntermedia.trim())
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault()
+    if (!tablaValida) return
     onGuardar(
       {
         tipo,
@@ -34,6 +52,9 @@ export function RelacionEditorModal({ titulo, valorInicial, onClose, onGuardar, 
         multiplicidad_origen: multOrigen.trim() || null,
         multiplicidad_destino: multDestino.trim() || null,
         forma,
+        id_clase_asociacion: admiteAsociacion ? claseAsociacion || null : null,
+        tabla_intermedia:
+          esMuchosAMuchos && !claseAsociacion && tablaIntermedia.trim() ? tablaIntermedia.trim() : null,
       },
       invertida,
     )
@@ -166,6 +187,48 @@ export function RelacionEditorModal({ titulo, valorInicial, onClose, onGuardar, 
             </select>
           </div>
         </div>
+        {esMuchosAMuchos && (
+          <p className="field__hint">
+            Muchos a muchos: el backend generado crea una tabla intermedia con PK compuesta y rutas para
+            vincular/desvincular.
+          </p>
+        )}
+
+        {admiteAsociacion && (
+          <div className="field">
+            <label className="field__label" htmlFor="relacion-clase-asociacion">
+              Clase de asociación
+            </label>
+            <select
+              id="relacion-clase-asociacion"
+              className="field__input"
+              value={claseAsociacion}
+              onChange={(e) => setClaseAsociacion(e.target.value)}
+            >
+              <option value="">(ninguna)</option>
+              {clasesCandidatas.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.nombre}
+                </option>
+              ))}
+            </select>
+            <p className="field__hint">
+              Para un vínculo con atributos propios (ej. Matricula con nota y fecha entre Estudiante y Curso):
+              esa clase pasa a ser la tabla intermedia.
+            </p>
+          </div>
+        )}
+
+        {esMuchosAMuchos && !claseAsociacion && (
+          <TextField
+            label="Nombre de la tabla intermedia (opcional)"
+            placeholder="por defecto: tablaA_tablaB en orden alfabético"
+            maxLength={63}
+            value={tablaIntermedia}
+            onChange={(e) => setTablaIntermedia(e.target.value.toLowerCase())}
+            error={tablaValida ? undefined : 'Solo minúsculas, dígitos y _, empezando por letra'}
+          />
+        )}
       </form>
     </Modal>
   )
