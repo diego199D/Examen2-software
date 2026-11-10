@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, String
+from sqlalchemy import DateTime, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
 
@@ -19,3 +19,8 @@ class Grupo(Base):
     # Para que "Grupo 7" y "grupo  7" sean el mismo grupo (ver services/grupos.py).
     nombre_normalizado: Mapped[str] = mapped_column(String(100), unique=True, nullable=False, index=True)
     fecha_creacion: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    # El chat del Senior es UNO por grupo (compartido por todos sus tableros):
+    # su modo de intervención y el resumen del historial viven acá.
+    modo_ia: Mapped[str] = mapped_column(String(20), nullable=False, default="automatico", server_default="automatico")
+    resumen_chat: Mapped[str | None] = mapped_column(Text, nullable=True)
+    resumen_hasta_id: Mapped[int | None] = mapped_column(nullable=True)

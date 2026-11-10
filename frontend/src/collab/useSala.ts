@@ -5,8 +5,10 @@ import { getToken } from '../auth/tokenStorage'
 import { wsBaseUrl } from './useColaboracion'
 
 /**
- * Segundo parcial — sala en tiempo real del proyecto (chat grupal público,
- * presencia y Desarrollador Senior) sobre `/ws/proyectos/{id}/sala`.
+ * Segundo parcial — sala en tiempo real del GRUPO (un único chat público
+ * para todos los proyectos del grupo, presencia y Desarrollador Senior) sobre
+ * `/ws/proyectos/{id}/sala`: se entra desde un proyecto, que es el contexto
+ * del Senior para lo que se pregunta desde esta pestaña.
  * Protocolo JSON `{type, payload}`: ver backend/app/services/sala.py y
  * docs/documentacion-tecnica.md. Se reconecta solo (backoff exponencial,
  * hasta 15 s) y al reconectar el servidor reenvía historial y snapshot.
@@ -32,11 +34,13 @@ export type MensajeSala = {
   tipo: 'humano' | 'senior_ai' | 'sistema'
   texto: string
   fecha: string
+  /** Proyecto desde el que se escribió (el chat es único por grupo). */
+  proyecto: { id: number; nombre: string | null }
   dirigido_a: { id: number; nombre: string } | null
   propuesta: PropuestaIA | null
 }
 
-export type UsuarioSala = { id: number; nombre: string }
+export type UsuarioSala = { id: number; nombre: string; proyecto?: { id: number; nombre: string } }
 
 export type EstadoSala = 'conectando' | 'conectado' | 'desconectado'
 
@@ -98,7 +102,8 @@ export function useSala(proyectoId: number, onDiagramaIA?: (diagrama: DiagramaDa
           setAviso(`${p.por as string} cambió el modo del Senior a "${etiquetaModo(p.modo as ModoIA)}".`)
           break
         case 'AI_DIAGRAM_ACTION_EXECUTED':
-          onDiagramaRef.current?.(p.diagrama as DiagramaData)
+          // El chat es del grupo: solo interesa si el cambio fue en ESTE proyecto.
+          if (p.proyecto_id === proyectoId) onDiagramaRef.current?.(p.diagrama as DiagramaData)
           break
         case 'ERROR':
           setAviso(p.mensaje as string)

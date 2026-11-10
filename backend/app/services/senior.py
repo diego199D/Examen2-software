@@ -60,8 +60,9 @@ def asegurar_saludo(texto: str, nombre: str) -> str:
 
 
 PROMPT_SISTEMA = """Sos "Senior", un desarrollador de software senior que acompaña a un equipo de estudiantes \
-mientras modelan un diagrama de clases UML en una herramienta colaborativa. Participás en el chat GRUPAL y \
-público del equipo: todos leen lo que respondés. Hablás en español (Bolivia/Latinoamérica), con tono cercano \
+mientras modelan diagramas de clases UML en una herramienta colaborativa. Participás en el chat GRUPAL y \
+público del equipo (uno solo para todo el grupo, aunque cada integrante esté en un proyecto distinto): todos \
+leen lo que respondés. Los cambios que hagas se aplican al diagrama del proyecto donde está quien pregunta. Hablás en español (Bolivia/Latinoamérica), con tono cercano \
 y profesional.
 
 Reglas obligatorias:
@@ -117,6 +118,7 @@ class MensajeHistorial:
     autor: str
     es_ia: bool
     texto: str
+    proyecto: str | None = None  # proyecto desde el que se escribió (chat por grupo)
 
 
 @dataclass
@@ -129,6 +131,7 @@ class ContextoSenior:
     autor_id: int
     autor_nombre: str
     pregunta: str
+    proyecto: str = ""  # proyecto donde está trabajando quien pregunta
 
 
 @dataclass
@@ -177,20 +180,29 @@ def diagrama_para_prompt(diagrama: DiagramaIO) -> str:
 
 def construir_prompt(ctx: ContextoSenior) -> tuple[str, str]:
     system = PROMPT_SISTEMA.format(tipos=", ".join(TIPOS_CANONICOS)) + "\n" + _INSTRUCCIONES_MODO[ctx.modo]
+    donde = f' del proyecto "{ctx.proyecto}" (donde está trabajando {ctx.autor_nombre})' if ctx.proyecto else ""
     partes = [
         f"Grupo: {ctx.grupo}",
-        f"Diagrama actual (JSON):\n{diagrama_para_prompt(ctx.diagrama)}",
+        f"Diagrama actual{donde} (JSON):\n{diagrama_para_prompt(ctx.diagrama)}",
     ]
     if ctx.resumen:
         partes.append(f"Resumen de la conversación anterior:\n{ctx.resumen}")
     if ctx.historial:
-        lineas = [f"[{NOMBRE_SENIOR if m.es_ia else m.autor}]: {m.texto}" for m in ctx.historial]
-        partes.append("Últimos mensajes del chat del grupo:\n" + "\n".join(lineas))
+        lineas = [f"[{_autor_historial(m)}]: {m.texto}" for m in ctx.historial]
+        partes.append(
+            "Últimos mensajes del chat del grupo (es un chat único para todo el grupo; entre paréntesis, el "
+            "proyecto desde el que se escribió cada mensaje):\n" + "\n".join(lineas)
+        )
     partes.append(
         f"Pregunta ACTUAL de {ctx.autor_nombre} (id de usuario {ctx.autor_id}), a quien tenés que "
         f"responderle por su nombre:\n[{ctx.autor_nombre}]: {ctx.pregunta}"
     )
     return system, "\n\n".join(partes)
+
+
+def _autor_historial(m: MensajeHistorial) -> str:
+    autor = NOMBRE_SENIOR if m.es_ia else m.autor
+    return f"{autor} ({m.proyecto})" if m.proyecto else autor
 
 
 def consultar_senior(ctx: ContextoSenior) -> RespuestaSenior:
@@ -217,5 +229,5 @@ def resumir(resumen_previo: str | None, mensajes: list[MensajeHistorial]) -> str
     texto = ""
     if resumen_previo:
         texto += f"Resumen previo:\n{resumen_previo}\n\n"
-    texto += "Mensajes:\n" + "\n".join(f"[{NOMBRE_SENIOR if m.es_ia else m.autor}]: {m.texto}" for m in mensajes)
+    texto += "Mensajes:\n" + "\n".join(f"[{_autor_historial(m)}]: {m.texto}" for m in mensajes)
     return gemini_client.generate_text(PROMPT_RESUMEN, texto).strip()

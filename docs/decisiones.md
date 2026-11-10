@@ -74,6 +74,13 @@ Otras decisiones del generador:
   - El chat se guarda en `mensajes_chat` y el modo de la IA en `proyectos.modo_ia`.
   - Si todos se desconectan mientras el Senior está respondiendo, la sala sigue viva hasta que termina y la respuesta queda guardada.
 
+## 3b. Un chat por grupo
+
+- El chat (con el Senior) es **uno solo por grupo**, compartido por todos los proyectos del grupo (el del dueño del proyecto): cualquier integrante conectado, esté en el tablero que esté, ve las consultas a la IA y los mensajes entre los demás. Cada mensaje lleva el proyecto desde el que se escribió ("en Biblioteca") y la lista de conectados muestra en qué proyecto está cada uno.
+- El Senior responde con el diagrama del proyecto de quien pregunta y aplica allí sus cambios; los demás lienzos no se tocan.
+- El modo de intervención y el resumen del historial son del grupo (`grupos.modo_ia`, `grupos.resumen_chat`). Los mensajes guardan `id_grupo` además de `id_proyecto`.
+- Un colaborador de otro grupo que entra a un proyecto ve el chat del grupo dueño de ese proyecto. Si el dueño no tiene grupo, el chat es solo del proyecto.
+
 ## 4. Desarrollador Senior (RF-IA)
 
 - **Chat público**: hay un único chat público por proyecto. El panel privado del asistente del primer parcial (CU13) **se reemplazó** en la interfaz por este chat grupal, porque la consigna dice que no hay canales privados con la IA. El endpoint HTTP `/proyectos/{id}/agente` y su código siguen en el backend, pero la interfaz ya no lo usa. Los comandos de voz (CU11) siguen siendo independientes.

@@ -53,7 +53,9 @@ El CRDT garantiza que todos los clientes converjan al mismo estado aunque editen
 
 Las mutaciones del Senior se validan y se aplican en el servidor, dentro de ese mismo documento. Desde ahí llegan a todas las pantallas como cualquier cambio remoto.
 
-## 2. Protocolo de eventos de la sala
+## 2. Protocolo de eventos de la sala (una por grupo)
+
+Hay **una sala por grupo**: todos los proyectos del grupo comparten el mismo chat. Se entra desde un proyecto, que es el contexto del Senior para lo que se pregunta desde esa conexión; cada mensaje trae `proyecto: {id, nombre}` y la presencia indica en qué proyecto está cada integrante.
 
 WebSocket: `wss://<host>/api/ws/proyectos/{id}/sala?token=<JWT>`. Cada mensaje es `{"type": "...", "payload": {...}, "timestamp": "ISO-8601"}`.
 

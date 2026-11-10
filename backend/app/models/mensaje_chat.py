@@ -15,8 +15,8 @@ class TipoMensaje(str, enum.Enum):
 
 
 class MensajeChat(Base):
-    """Segundo parcial (RF-IA): chat grupal único y público de la sala de un
-    proyecto, persistido para que la conversación sobreviva a que todos se
+    """Segundo parcial (RF-IA): chat grupal único y público de cada GRUPO
+    (compartido por todos sus proyectos), persistido para que la conversación sobreviva a que todos se
     desconecten. `datos` guarda, para los mensajes del Senior, la propuesta
     de cambios al diagrama y su estado (pendiente/aplicada/rechazada)."""
 
@@ -24,6 +24,11 @@ class MensajeChat(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     id_proyecto: Mapped[int] = mapped_column(ForeignKey("proyectos.id", ondelete="CASCADE"), nullable=False, index=True)
+    # Chat por GRUPO: todos los mensajes del grupo, escritos desde cualquiera
+    # de sus proyectos. `id_proyecto` es el proyecto desde el que se escribió
+    # (y sobre cuyo diagrama actúa el Senior). Null solo si el dueño del
+    # proyecto no tiene grupo: entonces el chat es del proyecto.
+    id_grupo: Mapped[int | None] = mapped_column(ForeignKey("grupos.id", ondelete="CASCADE"), nullable=True, index=True)
     id_usuario: Mapped[int | None] = mapped_column(ForeignKey("usuarios.id", ondelete="SET NULL"), nullable=True)
     autor_nombre: Mapped[str] = mapped_column(String(150), nullable=False)
     tipo: Mapped[TipoMensaje] = mapped_column(

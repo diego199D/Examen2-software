@@ -92,14 +92,18 @@ def _usuario(SL, nombre, grupo=None):
         db.close()
 
 
-def _proyecto(SL, dueño, modo="automatico", clases=()):
+def _proyecto(SL, dueño, modo="automatico", clases=(), nombre="Tienda"):
     db = SL()
     try:
-        p = Proyecto(nombre="Tienda", id_administrador=dueño.id, modo_ia=modo)
+        p = Proyecto(nombre=nombre, id_administrador=dueño.id, modo_ia=modo)
         db.add(p)
+        # El modo del Senior es del GRUPO (chat único por grupo).
+        dueño_db = db.get(Usuario, dueño.id)
+        if dueño_db.grupo is not None:
+            dueño_db.grupo.modo_ia = modo
         db.commit()
         for i, n in enumerate(clases):
-            db.add(ClaseUml(id=f"c{i}", id_proyecto=p.id, nombre=n, pos_x=0, pos_y=0))
+            db.add(ClaseUml(id=f"p{p.id}c{i}", id_proyecto=p.id, nombre=n, pos_x=0, pos_y=0))
         db.commit()
         db.refresh(p)
         return p
@@ -337,8 +341,60 @@ class TestSenior:
             cambio = _hasta(b, "AI_MODE_CHANGED")
             assert cambio == {"modo": "consultivo", "por": "Juan"}
         db = SL()
-        assert db.get(Proyecto, p.id).modo_ia == "consultivo"
+        assert db.get(Usuario, juan.id).grupo.modo_ia == "consultivo"
         db.close()
+
+
+class TestChatPorGrupo:
+    def test_integrantes_en_proyectos_distintos_comparten_el_chat(self, cliente, SL, equipo, senior_falso):
+        juan, maria = equipo
+        tienda = _proyecto(SL, juan, nombre="Tienda", clases=["Factura"])
+        biblioteca = _proyecto(SL, maria, nombre="Biblioteca", clases=["Libro"])
+        senior_falso["respuesta"] = lambda ctx: senior.RespuestaSenior(
+            texto=f"{ctx.autor_nombre}, en {ctx.proyecto} veo {[c.nombre for c in ctx.diagrama.clases]}"
+        )
+        with cliente.websocket_connect(_url(tienda, juan)) as a, cliente.websocket_connect(_url(biblioteca, maria)) as b:
+            lista = _hasta(a, "PRESENCE_LIST", cond=lambda q: len(q["usuarios"]) == 2)
+            assert {u["proyecto"]["nombre"] for u in lista["usuarios"]} == {"Tienda", "Biblioteca"}
+            _enviar(b, "hola Juan, estoy en la biblioteca")
+            m = _hasta(a, "CHAT_MESSAGE")["mensaje"]
+            assert m["autor"]["nombre"] == "Maria" and m["proyecto"]["nombre"] == "Biblioteca"
+            # Juan ve la consulta de María al Senior y la respuesta, con el diagrama de SU proyecto.
+            _enviar(b, "@senior ¿qué clases tengo?")
+            r = _hasta(a, "CHAT_MESSAGE", cond=lambda q: q["mensaje"]["tipo"] == "senior_ai")["mensaje"]
+            assert r["texto"] == "Maria, en Biblioteca veo ['Libro']"
+        # Al volver desde otro proyecto del grupo, el historial es el mismo.
+        with cliente.websocket_connect(_url(tienda, maria)) as c:
+            textos = [m["texto"] for m in _hasta(c, "CHAT_HISTORY")["mensajes"]]
+            assert "hola Juan, estoy en la biblioteca" in textos and len(textos) == 3
+
+    def test_cambio_del_senior_va_al_proyecto_de_quien_pregunta(self, cliente, SL, equipo, senior_falso):
+        juan, maria = equipo
+        tienda = _proyecto(SL, juan, nombre="Tienda", clases=["Factura"])
+        biblioteca = _proyecto(SL, maria, nombre="Biblioteca", clases=["Libro"])
+        senior_falso["respuesta"] = senior.RespuestaSenior(
+            texto="Maria, listo.", acciones=[{"action": "ADD_ENTITY", "entityData": {"name": "Prestamo"}}]
+        )
+        with cliente.websocket_connect(_url(tienda, juan)) as a, cliente.websocket_connect(_url(biblioteca, maria)) as b:
+            _hasta(a, "PRESENCE_LIST", cond=lambda q: len(q["usuarios"]) == 2)
+            _enviar(b, "@senior agregá Prestamo")
+            ejecutado = _hasta(a, "AI_DIAGRAM_ACTION_EXECUTED")
+            assert ejecutado["proyecto_id"] == biblioteca.id
+        db = SL()
+        nombres = lambda p: {c.nombre for c in db.scalars(select(ClaseUml).where(ClaseUml.id_proyecto == p.id))}
+        assert nombres(biblioteca) == {"Libro", "Prestamo"} and nombres(tienda) == {"Factura"}
+        db.close()
+
+    def test_otro_grupo_no_ve_el_chat(self, cliente, SL, equipo, senior_falso):
+        juan, _ = equipo
+        pedro = _usuario(SL, "Pedro", grupo="Otro")
+        p_juan = _proyecto(SL, juan, nombre="Tienda")
+        p_pedro = _proyecto(SL, pedro, nombre="Taller")
+        with cliente.websocket_connect(_url(p_juan, juan)) as a:
+            _enviar(a, "secreto del grupo")
+            _hasta(a, "CHAT_MESSAGE")
+        with cliente.websocket_connect(_url(p_pedro, pedro)) as b:
+            assert _hasta(b, "CHAT_HISTORY")["mensajes"] == []
 
 
 class TestPuras:

@@ -1,5 +1,7 @@
-"""Segundo parcial — WebSocket JSON de la sala de un proyecto (chat grupal,
-presencia y Desarrollador Senior). Protocolo de eventos: ver el encabezado
+"""Segundo parcial — WebSocket JSON de la sala del GRUPO (chat grupal único
+para todos los proyectos del grupo, presencia y Desarrollador Senior). Se
+entra desde un proyecto: ese proyecto es el contexto del Senior para lo que
+pregunte esa conexión. Protocolo de eventos: ver el encabezado
 de `app/services/sala.py` y docs/documentacion-tecnica.md.
 
 Mismo control de acceso que el WebSocket de Yjs (CU10): JWT por query param
@@ -23,7 +25,7 @@ from app.routers.ws_diagramas import (
 from app.services import sala as sala_mod
 from app.services import yjs_rooms
 from app.services.acceso import obtener_proyecto_con_acceso
-from app.services.sala import Conexion, evento
+from app.services.sala import Conexion, clave_sala, evento
 
 router = APIRouter(tags=["sala-tiempo-real"])
 
@@ -40,18 +42,28 @@ async def ws_sala(
         await websocket.close(code=CIERRE_SIN_TOKEN)
         return
     try:
-        obtener_proyecto_con_acceso(proyecto_id, usuario, db)
+        proyecto = obtener_proyecto_con_acceso(proyecto_id, usuario, db)
     except HTTPException as exc:
         await websocket.close(code=CIERRE_PROYECTO_NO_ENCONTRADO if exc.status_code == 404 else CIERRE_SIN_ACCESO)
         return
 
-    datos_usuario = {"id": usuario.id, "nombre": usuario.nombre_completo}
-    grupo = usuario.nombre_grupo
+    # Chat por GRUPO: la sala es la del grupo del dueño del proyecto (todos
+    # sus tableros comparten el mismo chat). Ver app/services/sala.py.
+    clave, id_grupo = clave_sala(proyecto)
+    grupo = proyecto.administrador.nombre_grupo
+    datos_proyecto = {"id": proyecto.id, "nombre": proyecto.nombre}
+    datos_usuario = {"id": usuario.id, "nombre": usuario.nombre_completo, "proyecto": datos_proyecto}
     db.close()  # la conexión puede durar horas: no retener la sesión del request
 
     await websocket.accept()
-    conexion = Conexion(websocket=websocket, usuario_id=usuario.id, nombre=usuario.nombre_completo)
-    sala, nuevo_usuario = await sala_mod.gestor_chat.conectar(proyecto_id, conexion)
+    conexion = Conexion(
+        websocket=websocket,
+        usuario_id=usuario.id,
+        nombre=usuario.nombre_completo,
+        proyecto_id=proyecto.id,
+        proyecto_nombre=datos_proyecto["nombre"],
+    )
+    sala, nuevo_usuario = await sala_mod.gestor_chat.conectar(clave, id_grupo, conexion)
 
     try:
         await _enviar_estado_inicial(sala, conexion, datos_usuario, grupo)
@@ -87,7 +99,7 @@ async def ws_sala(
     except (WebSocketDisconnect, RuntimeError):
         pass
     finally:
-        sala_restante, se_fue = await sala_mod.gestor_chat.desconectar(proyecto_id, conexion)
+        sala_restante, se_fue = await sala_mod.gestor_chat.desconectar(clave, conexion)
         if sala_restante is not None and sala_restante.conexiones:
             if se_fue:
                 await sala_restante.broadcast(evento("USER_LEFT", {"usuario": datos_usuario}))
@@ -96,8 +108,18 @@ async def ws_sala(
 
 async def _enviar_estado_inicial(sala, conexion: Conexion, datos_usuario: dict, grupo: str | None) -> None:
     mensajes, modo = await asyncio.to_thread(sala.historial)
-    diagrama, version = await yjs_rooms.leer_diagrama(sala.proyecto_id)
-    await conexion.enviar(evento("WELCOME", {"usuario": datos_usuario, "grupo": grupo, "modo_ia": modo}))
+    diagrama, version = await yjs_rooms.leer_diagrama(conexion.proyecto_id)
+    await conexion.enviar(
+        evento(
+            "WELCOME",
+            {"usuario": datos_usuario, "grupo": grupo, "modo_ia": modo, "proyecto": datos_usuario["proyecto"]},
+        )
+    )
     await conexion.enviar(evento("CHAT_HISTORY", {"mensajes": mensajes}))
-    await conexion.enviar(evento("DIAGRAM_SNAPSHOT", {"diagrama": diagrama.model_dump(mode="json"), "version": version}))
+    await conexion.enviar(
+        evento(
+            "DIAGRAM_SNAPSHOT",
+            {"proyecto_id": conexion.proyecto_id, "diagrama": diagrama.model_dump(mode="json"), "version": version},
+        )
+    )
     await conexion.enviar(evento("PRESENCE_LIST", {"usuarios": sala.presentes()}))

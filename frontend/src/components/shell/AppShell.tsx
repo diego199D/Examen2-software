@@ -115,7 +115,7 @@ export function AppShell({ project }: { project: Proyecto }) {
           onRehacer={diagrama.rehacer}
         />
         </AccionesRelacionContext.Provider>
-        {chatAbierto && <ChatGrupalPanel sala={sala} usuarioId={user?.id} />}
+        {chatAbierto && <ChatGrupalPanel sala={sala} usuarioId={user?.id} proyectoId={project.id} />}
       </div>
 
       {modal?.tipo === 'relacion-nueva' && (

@@ -65,9 +65,20 @@ function Propuesta({ mensaje, onDecidir }: { mensaje: MensajeSala; onDecidir: (a
   )
 }
 
-function Mensaje({ m, propio, onDecidir }: { m: MensajeSala; propio: boolean; onDecidir: (a: boolean) => void }) {
+function Mensaje({
+  m,
+  propio,
+  proyectoActual,
+  onDecidir,
+}: {
+  m: MensajeSala
+  propio: boolean
+  proyectoActual: number
+  onDecidir: (a: boolean) => void
+}) {
   if (m.tipo === 'sistema') return <div className="chat-sistema">{m.texto}</div>
   const esIA = m.tipo === 'senior_ai'
+  const deOtroProyecto = m.proyecto?.id && m.proyecto.id !== proyectoActual
   return (
     <div className={'chat-msg' + (esIA ? ' chat-msg--ia' : propio ? ' chat-msg--propio' : '')}>
       <div className="chat-msg__meta">
@@ -75,6 +86,11 @@ function Mensaje({ m, propio, onDecidir }: { m: MensajeSala; propio: boolean; on
         <span className={'chat-msg__badge' + (esIA ? ' chat-msg__badge--ia' : '')}>{esIA ? 'IA' : 'humano'}</span>
         <span className="chat-msg__hora">{hora(m.fecha)}</span>
       </div>
+      {deOtroProyecto && (
+        <div className="chat-msg__proyecto" title="Escrito desde otro proyecto del grupo">
+          en {m.proyecto.nombre ?? 'otro proyecto'}
+        </div>
+      )}
       <div className="chat-msg__texto">
         <TextoRico texto={m.texto} />
       </div>
@@ -88,7 +104,15 @@ function Mensaje({ m, propio, onDecidir }: { m: MensajeSala; propio: boolean; on
  * los mismos mensajes, con autor, hora y si es humano o el Senior. La IA solo
  * responde si se la menciona (@senior / "Senior, ...") o con el toggle.
  */
-export function ChatGrupalPanel({ sala, usuarioId }: { sala: Sala; usuarioId: number | undefined }) {
+export function ChatGrupalPanel({
+  sala,
+  usuarioId,
+  proyectoId,
+}: {
+  sala: Sala
+  usuarioId: number | undefined
+  proyectoId: number
+}) {
   const [texto, setTexto] = useState('')
   const [preguntar, setPreguntar] = useState(false)
   const listaRef = useRef<HTMLDivElement>(null)
@@ -128,6 +152,9 @@ export function ChatGrupalPanel({ sala, usuarioId }: { sala: Sala; usuarioId: nu
           {sala.presentes.map((u) => (
             <span key={u.id} className="chat-presente">
               ● {u.nombre}
+              {u.proyecto && u.proyecto.id !== proyectoId && (
+                <span className="chat-presente__donde"> · en {u.proyecto.nombre}</span>
+              )}
             </span>
           ))}
         </div>
@@ -141,7 +168,9 @@ export function ChatGrupalPanel({ sala, usuarioId }: { sala: Sala; usuarioId: nu
             ))}
           </select>
         </label>
-        <p className="chat-panel__ayuda">{MODOS.find((m) => m.value === sala.modo)?.ayuda}</p>
+        <p className="chat-panel__ayuda">
+          {MODOS.find((m) => m.value === sala.modo)?.ayuda} Chat compartido por todos los proyectos del grupo.
+        </p>
       </div>
 
       {sala.aviso && (
@@ -165,6 +194,7 @@ export function ChatGrupalPanel({ sala, usuarioId }: { sala: Sala; usuarioId: nu
             key={m.id}
             m={m}
             propio={m.autor.id === usuarioId}
+            proyectoActual={proyectoId}
             onDecidir={(aprobar) => sala.decidirPropuesta(m.id, aprobar)}
           />
         ))}

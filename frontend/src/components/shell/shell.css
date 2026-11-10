@@ -830,3 +830,14 @@
   gap: var(--space-2);
   align-items: flex-end;
 }
+
+.chat-msg__proyecto {
+  margin-bottom: 2px;
+  font-size: 10px;
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+.chat-presente__donde {
+  color: var(--text-secondary);
+}
