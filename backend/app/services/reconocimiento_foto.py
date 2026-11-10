@@ -1,16 +1,22 @@
 """CU12 — reconocimiento de diagrama de clases a partir de una fotografía.
 
-Reutiliza la infraestructura de OpenAI ya construida en CU11/CU13
-(`OPENAI_API_KEY` de `app/core/config.py` -- pero con su propio modelo,
-`OPENAI_VISION_MODEL`, ver la tercera vuelta más abajo --, la misma
+**Segundo parcial: migrado a Google Gemini.** Toda llamada pasa
+por `app/services/ai/gemini_client.py::image_to_diagram` (salida JSON con
+`response_schema`; los esquemas de abajo se siguen escribiendo como JSON
+Schema y el cliente los traduce al subconjunto OpenAPI de Gemini). Modelo:
+`GEMINI_VISION_MODEL`. Las menciones a el modelo grande anterior/`detail: high` de más abajo
+son el historial de mediciones con el proveedor anterior (las reglas en código que salieron
+de ahí siguen aplicando igual con Gemini); con Gemini se pide
+`media_resolution=HIGH`, el equivalente de `detail: high`.
+
+Reutiliza la infraestructura de IA ya construida en CU11/CU13 (la misma
 `ComandoVozNoDisponibleError` de `app/services/comandos_voz.py` para
 errores de red/API -- mismo significado, no se crea una excepción hermana
 solo por prolijidad cosmética) pero con dos diferencias de fondo respecto a
 CU11/CU13:
 
 1. No es function calling sobre acciones del editor -- es una extracción
-   estructurada de una sola vez (`response_format` con JSON Schema en modo
-   `strict`, para forzar una salida parseable en vez de texto libre a
+   estructurada de una sola vez (salida JSON con `response_schema`, para forzar una salida parseable en vez de texto libre a
    interpretar con regex) a partir de una imagen (input de visión).
 2. El resultado NUNCA se aplica solo -- `reconocer_diagrama` es de solo
    lectura (no persiste nada); recién `aplicar_reconocimiento` escribe en la
@@ -51,11 +57,11 @@ atención del modelo con todo lo demás. Se agregaron dos mejoras, ninguna
 garantiza 100% (sigue siendo un modelo de visión sobre una foto
 potencialmente ambigua), pero suben la confiabilidad real:
 
-1. `_llamar_openai_reconocimiento` ahora pide el `image_url` con
+1. `_llamar_modelo_reconocimiento` ahora pide el `image_url` con
    `"detail": "high"` (antes no se especificaba, así que usaba el default
    `"auto"` de la API, que puede achicar la imagen y perder el detalle fino
    de un trazo delgado).
-2. `_verificar_extremos_marcados`: una segunda llamada a OpenAI, con la
+2. `_verificar_extremos_marcados`: una segunda llamada al modelo, con la
    MISMA imagen, pero con un prompt mucho más chico y enfocado -- solo le
    pasa al modelo los dos nombres de clase de cada relación dirigida y le
    pregunta, sin el resto del diagrama de por medio, en cuál de esas dos
@@ -85,13 +91,13 @@ del diagrama):
   concreto; `_relacion_desde_modelo` los traduce de vuelta al shape de
   `RelacionDetectadaIO` (el contrato de la API no cambia). El orden importó
   tanto como el nombre: con los nombres nuevos pero las dos multiplicidades
-  al final (después de ambas clases y del tipo), gpt-4o las siguió
+  al final (después de ambas clases y del tipo), el modelo grande anterior las siguió
   invirtiendo (hasta 4 de 7, contradiciendo el ejemplo del prompt); con el
   orden intercalado, 0 invertidas en 3 de 3 intentos.
 - Guía de cómo leer las líneas en el prompt (dos extremos por línea, una
   línea puede pasar por detrás de una caja, los textos en medio de una línea
   son etiquetas y no atributos): con ella no se perdió ninguna clase en las
-  variantes medidas (sin ella, gpt-4o-mini perdía una clase en 2 de 3).
+  variantes medidas (sin ella, el modelo chico anterior perdía una clase en 2 de 3).
 - Probada también una extracción en dos pasadas (inventario de clases y
   después relaciones con los nombres restringidos a esa lista): NO mejoró
   nada medible respecto de una sola llamada con lo anterior -- se descartó.
@@ -104,24 +110,22 @@ del diagrama):
   código y lo avisa en `ReconocimientoFotoResultado.advertencias`.
 - `_sin_multiplicidad_en_herencia`: una herencia nunca lleva multiplicidad,
   se limpia en código (no se confía solo en el prompt).
-- Modelo: gpt-4o-mini fue inestable en todas las variantes (según el
+- Modelo: el modelo chico anterior fue inestable en todas las variantes (según el
   intento perdía una clase entera, escribía mal nombres como "Membrisia", o
-  inventaba relaciones distintas); gpt-4o, con todo lo anterior, dio el
+  inventaba relaciones distintas); el modelo grande anterior, con todo lo anterior, dio el
   resultado perfecto en 2 de 3 intentos y nunca perdió clases ni invirtió
-  multiplicidades. Por eso CU12 usa su propio `OPENAI_VISION_MODEL`
-  (default gpt-4o) en vez del `OPENAI_MODEL` compartido con CU11/CU13.
+  multiplicidades. Por eso CU12 tiene su propio modelo de visión configurable
+  (hoy `GEMINI_VISION_MODEL`).
 """
 
 from __future__ import annotations
 
-import base64
 import io
 import json
 import logging
 from dataclasses import dataclass
 from uuid import uuid4
 
-from openai import APIConnectionError, APIStatusError, APITimeoutError, OpenAI, RateLimitError
 from PIL import Image, UnidentifiedImageError
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
@@ -135,6 +139,8 @@ from app.schemas.reconocimiento_foto import (
     ReconocimientoFotoResultado,
     RelacionDetectadaIO,
 )
+from app.services.ai import gemini_client
+from app.services.ai.gemini_client import IANoDisponibleError, IARespuestaInvalidaError
 from app.services.comandos_voz import ComandoVozNoDisponibleError
 from app.services.deduccion_fk import clases_referenciadas_no_detectadas, revisar_con_fk
 from app.services.diagrama import MULTIPLICIDADES_VALIDAS, cargar_diagrama, guardar_diagrama
@@ -317,17 +323,11 @@ _ESQUEMA_RESPUESTA = {
     "additionalProperties": False,
 }
 
-_RESPONSE_FORMAT = {
-    "type": "json_schema",
-    "json_schema": {"name": "reconocimiento_diagrama", "schema": _ESQUEMA_RESPUESTA, "strict": True},
-}
-
-
 def _mismo_nombre(a: str | None, b: str | None) -> bool:
     return a is not None and b is not None and normalizar_nombre(a) == normalizar_nombre(b)
 
 
-# Con `"detail": "high"`, la API de OpenAI encaja la imagen en 2048x2048 y
+# (Medido con el proveedor anterior; con Gemini se mantiene por las dudas.) Con `"detail": "high"`, esa API encajaba la imagen en 2048x2048 y
 # después la reduce hasta que su lado corto mida 768px, pero NUNCA la
 # agranda: una captura chica (p. ej. 660x440) llega con muy pocos píxeles
 # por número de multiplicidad o por trazo de línea. Se agranda acá hasta ese
@@ -342,7 +342,7 @@ def _preparar_imagen(contenido: bytes, content_type: str) -> tuple[bytes, str]:
     """Devuelve la imagen a mandar al modelo: agrandada si es chica (ver
     arriba), o la original sin tocar si ya alcanza. Lanza
     `ImagenInvalidaError` si el archivo no es una imagen legible (antes se
-    mandaba igual a OpenAI y fallaba recién ahí, gastando la llamada)."""
+    mandaba igual a la API y fallaba recién ahí, gastando la llamada)."""
     try:
         with Image.open(io.BytesIO(contenido)) as imagen:
             imagen.load()
@@ -388,40 +388,26 @@ def _relacion_desde_modelo(crudo: dict) -> dict:
     }
 
 
-def _llamar_openai_reconocimiento(contenido: bytes, content_type: str) -> ReconocimientoFotoResultado:
-    """Llamada principal (extracción completa) al SDK de OpenAI -- junto con
-    `_verificar_extremos_marcados` de más abajo, son los dos únicos puntos
-    que le pegan a la API real; ambos se monkeypatchean en los tests, mismo
-    patrón que `comandos_voz._llamar_openai`/`agente._llamar_openai_agente`."""
-    if not settings.OPENAI_API_KEY:
-        raise ComandoVozNoDisponibleError("OPENAI_API_KEY no está configurada en el servidor.")
-
-    data_url = f"data:{content_type};base64,{base64.b64encode(contenido).decode('ascii')}"
-    cliente = OpenAI(api_key=settings.OPENAI_API_KEY)
+def _llamar_modelo_reconocimiento(contenido: bytes, content_type: str) -> ReconocimientoFotoResultado:
+    """Llamada principal (extracción completa) a Gemini con salida JSON
+    estructurada -- junto con `_verificar_extremos_marcados` y
+    `_verificar_lineas`, los únicos puntos que le pegan a la API real;
+    se monkeypatchean en los tests."""
     try:
-        respuesta = cliente.chat.completions.create(
-            model=settings.OPENAI_VISION_MODEL,
-            messages=[
-                {"role": "system", "content": _PROMPT_SISTEMA},
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": "Interpretá el diagrama de clases UML de esta imagen."},
-                        {"type": "image_url", "image_url": {"url": data_url, "detail": "high"}},
-                    ],
-                },
-            ],
-            response_format=_RESPONSE_FORMAT,
+        crudo = gemini_client.image_to_diagram(
+            imagen=contenido,
+            mime=content_type,
+            system=_PROMPT_SISTEMA,
+            prompt="Interpretá el diagrama de clases UML de esta imagen.",
+            schema=_ESQUEMA_RESPUESTA,
+            modelo=settings.GEMINI_VISION_MODEL,
         )
-    except (APIConnectionError, APITimeoutError, RateLimitError, APIStatusError) as err:
-        raise ComandoVozNoDisponibleError(str(err)) from err
-
-    contenido_json = respuesta.choices[0].message.content
+    except IARespuestaInvalidaError as err:
+        raise ComandoVozNoDisponibleError(f"Respuesta inesperada del modelo de reconocimiento: {err}") from err
     try:
-        crudo = json.loads(contenido_json)
         crudo["relaciones"] = [_relacion_desde_modelo(r) for r in crudo.get("relaciones", [])]
         return ReconocimientoFotoResultado(**crudo)
-    except (json.JSONDecodeError, ValidationError, TypeError, KeyError, AttributeError) as err:
+    except (ValidationError, TypeError, KeyError, AttributeError) as err:
         raise ComandoVozNoDisponibleError(f"Respuesta inesperada del modelo de reconocimiento: {err}") from err
 
 
@@ -482,7 +468,7 @@ _SIN_VERIFICAR = ExtremoVerificado(clase=None, marcador_visible=None)
 def _verificar_extremos_marcados(
     contenido: bytes, content_type: str, relaciones: list[RelacionDetectadaIO]
 ) -> list[ExtremoVerificado]:
-    """Segunda pasada de OpenAI, enfocada solo en el marcador (triángulo o
+    """Segunda pasada del modelo, enfocada solo en el marcador (triángulo o
     rombo) de cada relación dirigida -- ver el docstring del módulo para el
     porqué. Devuelve una lista paralela a `relaciones`: el nombre de clase
     verificado (None si el modelo no lo pudo determinar, alucinó un nombre
@@ -495,31 +481,16 @@ def _verificar_extremos_marcados(
         {"indice": i, "clase_a": r.clase_origen, "clase_b": r.clase_destino, "tipo": r.tipo.value}
         for i, r in enumerate(relaciones)
     ]
-    data_url = f"data:{content_type};base64,{base64.b64encode(contenido).decode('ascii')}"
-    cliente = OpenAI(api_key=settings.OPENAI_API_KEY)
     try:
-        respuesta = cliente.chat.completions.create(
-            model=settings.OPENAI_VISION_MODEL,
-            messages=[
-                {"role": "system", "content": _PROMPT_VERIFICACION_EXTREMOS},
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": f"Relaciones a revisar: {json.dumps(lista, ensure_ascii=False)}",
-                        },
-                        {"type": "image_url", "image_url": {"url": data_url, "detail": "high"}},
-                    ],
-                },
-            ],
-            response_format={
-                "type": "json_schema",
-                "json_schema": {"name": "verificacion_extremos", "schema": _ESQUEMA_VERIFICACION_EXTREMOS, "strict": True},
-            },
+        crudo = gemini_client.image_to_diagram(
+            imagen=contenido,
+            mime=content_type,
+            system=_PROMPT_VERIFICACION_EXTREMOS,
+            prompt=f"Relaciones a revisar: {json.dumps(lista, ensure_ascii=False)}",
+            schema=_ESQUEMA_VERIFICACION_EXTREMOS,
+            modelo=settings.GEMINI_VISION_MODEL,
         )
-        crudo = json.loads(respuesta.choices[0].message.content)
-    except (APIConnectionError, APITimeoutError, RateLimitError, APIStatusError, json.JSONDecodeError, TypeError, KeyError):
+    except (IANoDisponibleError, IARespuestaInvalidaError, TypeError, KeyError):
         return [_SIN_VERIFICAR] * len(relaciones)
 
     por_indice: dict[int, dict] = {}
@@ -573,7 +544,7 @@ def reconocer_diagrama(contenido: bytes, content_type: str | None) -> Reconocimi
     frontend muestra antes de confirmar."""
     _validar_imagen(contenido, content_type)
     contenido, content_type = _preparar_imagen(contenido, content_type)
-    resultado = _llamar_openai_reconocimiento(contenido, content_type)
+    resultado = _llamar_modelo_reconocimiento(contenido, content_type)
     resultado.clases = _sin_clases_duplicadas(resultado.clases)
 
     if not resultado.reconocido or not resultado.clases:
@@ -588,7 +559,7 @@ def reconocer_diagrama(contenido: bytes, content_type: str | None) -> Reconocimi
     relaciones_dirigidas =[r for r in resultado.relaciones if r.tipo != TipoRelacion.ASOCIACION]
     if relaciones_dirigidas:
         # `_verificar_extremos_marcados` ya atrapa las fallas esperables de
-        # la llamada a OpenAI (red, rate limit, JSON inválido) y devuelve
+        # la llamada al modelo (red, rate limit, JSON inválido) y devuelve
         # puros `None` en ese caso -- este try/except es una segunda red de
         # seguridad por si algo *inesperado* la hace fallar igual (ej. un
         # cambio futuro que se le escape a esa lista de excepciones): la
@@ -769,28 +740,16 @@ def _verificar_lineas(contenido: bytes, content_type: str, pares: list[tuple[str
     `_verificar_extremos_marcados`: nunca lanza, cualquier falla es "no se
     sabe" y no cambia nada."""
     lista = [{"indice": i, "clase_a": a, "clase_b": b} for i, (a, b) in enumerate(pares)]
-    data_url = f"data:{content_type};base64,{base64.b64encode(contenido).decode('ascii')}"
-    cliente = OpenAI(api_key=settings.OPENAI_API_KEY)
     try:
-        respuesta = cliente.chat.completions.create(
-            model=settings.OPENAI_VISION_MODEL,
-            messages=[
-                {"role": "system", "content": _PROMPT_VERIFICACION_LINEAS},
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": f"Pares a revisar: {json.dumps(lista, ensure_ascii=False)}"},
-                        {"type": "image_url", "image_url": {"url": data_url, "detail": "high"}},
-                    ],
-                },
-            ],
-            response_format={
-                "type": "json_schema",
-                "json_schema": {"name": "verificacion_lineas", "schema": _ESQUEMA_VERIFICACION_LINEAS, "strict": True},
-            },
+        crudo = gemini_client.image_to_diagram(
+            imagen=contenido,
+            mime=content_type,
+            system=_PROMPT_VERIFICACION_LINEAS,
+            prompt=f"Pares a revisar: {json.dumps(lista, ensure_ascii=False)}",
+            schema=_ESQUEMA_VERIFICACION_LINEAS,
+            modelo=settings.GEMINI_VISION_MODEL,
         )
-        crudo = json.loads(respuesta.choices[0].message.content)
-    except (APIConnectionError, APITimeoutError, RateLimitError, APIStatusError, json.JSONDecodeError, TypeError, KeyError):
+    except (IANoDisponibleError, IARespuestaInvalidaError, TypeError, KeyError):
         return [_LINEA_SIN_VERIFICAR] * len(pares)
 
     por_indice = {

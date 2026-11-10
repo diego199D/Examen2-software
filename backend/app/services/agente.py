@@ -6,7 +6,7 @@ pedir una edición (una de las mismas 5 acciones de CU11, reutilizadas de
 `app/services/comandos_voz.py` sin duplicar nada) o hacer una pregunta sobre
 el diagrama actual o sobre UML en general. En AMBOS casos "no se pudo
 interpretar" es una respuesta conversacional normal (200, `accion=None`),
-nunca un error HTTP -- solo un fallo real de OpenAI (red/timeout/rate limit)
+nunca un error HTTP -- solo un fallo real de Gemini (red/timeout/rate limit)
 sigue siendo un error HTTP (503), igual que CU11 (se reutiliza la misma
 `ComandoVozNoDisponibleError`, mismo significado).
 
@@ -16,26 +16,22 @@ es el frontend con las funciones ya existentes de `useDiagrama.ts`.
 
 from __future__ import annotations
 
-import json
-
-from openai import APIConnectionError, APIStatusError, APITimeoutError, OpenAI, RateLimitError
 from sqlalchemy.orm import Session
 
-from app.core.config import settings
 from app.models.atributo import VisibilidadMiembro
 from app.models.relacion import TipoRelacion
 from app.schemas.agente import AgenteRespuesta, MensajeChatIO
 from app.schemas.diagrama import DiagramaIO
 from app.services.comandos_voz import (
     ComandoVozInvalidoError,
-    ComandoVozNoDisponibleError,
     construir_tools,
     resolver_accion,
     resumen_diagrama,
 )
+from app.services.ai import gemini_client
 from app.services.diagrama import MULTIPLICIDADES_VALIDAS, cargar_diagrama
 
-_ROL_OPENAI = {"usuario": "user", "agente": "assistant"}
+_ROL_GEMINI = {"usuario": "user", "agente": "model"}
 
 
 def _prompt_sistema_agente(diagrama: DiagramaIO) -> str:
@@ -80,49 +76,25 @@ def _prompt_sistema_agente(diagrama: DiagramaIO) -> str:
     )
 
 
-def _llamar_openai_agente(mensajes: list[dict]) -> tuple[str | None, dict | None, str | None]:
+def _llamar_modelo_agente(system: str, mensajes: list[tuple[str, str]]) -> tuple[str | None, dict | None, str | None]:
     """Devuelve (nombre_tool, argumentos, texto) -- exactamente uno de
-    (nombre_tool, argumentos) o texto viene poblado, nunca ambos."""
-    if not settings.OPENAI_API_KEY:
-        raise ComandoVozNoDisponibleError("OPENAI_API_KEY no está configurada en el servidor.")
-
-    cliente = OpenAI(api_key=settings.OPENAI_API_KEY)
-    try:
-        respuesta = cliente.chat.completions.create(
-            model=settings.OPENAI_MODEL,
-            messages=mensajes,
-            tools=construir_tools(),
-            tool_choice="auto",
-            parallel_tool_calls=False,
-        )
-    except (APIConnectionError, APITimeoutError, RateLimitError, APIStatusError) as err:
-        raise ComandoVozNoDisponibleError(str(err)) from err
-
-    mensaje = respuesta.choices[0].message
-    tool_calls = mensaje.tool_calls
-    if not tool_calls:
-        return None, None, mensaje.content or ""
-
-    llamada = tool_calls[0]
-    try:
-        argumentos = json.loads(llamada.function.arguments)
-    except json.JSONDecodeError:
-        return None, None, "No pude interpretar completamente ese pedido. ¿Podrías reformularlo?"
-    return llamada.function.name, argumentos, None
+    (nombre_tool, argumentos) o texto viene poblado, nunca ambos. Único
+    punto con red de este módulo (se mockea en los tests)."""
+    respuesta = gemini_client.chat_with_tools(system, mensajes, construir_tools())
+    if not respuesta.llamadas:
+        return None, None, respuesta.texto or ""
+    llamada = respuesta.llamadas[0]
+    return llamada.nombre, llamada.argumentos, None
 
 
 def _mapear_historial(historial: list[MensajeChatIO]) -> list[dict]:
-    return [{"role": _ROL_OPENAI[m.rol], "content": m.texto} for m in historial]
+    return [(_ROL_GEMINI[m.rol], m.texto) for m in historial]
 
 
 def responder_mensaje(proyecto_id: int, historial: list[MensajeChatIO], mensaje: str, db: Session) -> AgenteRespuesta:
     diagrama = cargar_diagrama(proyecto_id, db)
-    mensajes = [
-        {"role": "system", "content": _prompt_sistema_agente(diagrama)},
-        *_mapear_historial(historial),
-        {"role": "user", "content": mensaje},
-    ]
-    nombre_tool, argumentos, texto = _llamar_openai_agente(mensajes)
+    mensajes = [*_mapear_historial(historial), ("user", mensaje)]
+    nombre_tool, argumentos, texto = _llamar_modelo_agente(_prompt_sistema_agente(diagrama), mensajes)
 
     if nombre_tool is None:
         return AgenteRespuesta(texto=texto or "No pude interpretar ese pedido. ¿Podrías reformularlo?", accion=None)

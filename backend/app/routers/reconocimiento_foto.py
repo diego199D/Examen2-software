@@ -20,7 +20,7 @@ async def reconocer_foto_endpoint(
     db: Session = Depends(get_db),
 ) -> ReconocimientoFotoResultado:
     """CU12 - Interpreta una foto/captura de un diagrama de clases con visión
-    de OpenAI y devuelve la vista previa (clases/atributos/relaciones
+    de Gemini y devuelve la vista previa (clases/atributos/relaciones
     detectadas) SIN aplicarla al proyecto todavía -- ver
     POST .../confirmar."""
     obtener_proyecto_con_acceso(proyecto_id, usuario_actual, db)

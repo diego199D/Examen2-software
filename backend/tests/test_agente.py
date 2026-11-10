@@ -3,20 +3,22 @@ import uuid
 from app.models.usuario import RolUsuario
 from app.models.clase_uml import ClaseUml
 from app.services import agente
+from app.services.ai.gemini_client import IANoDisponibleError
 
 
 def _mock_llamada(monkeypatch, nombre_tool=None, argumentos=None, texto=None):
-    monkeypatch.setattr(agente, "_llamar_openai_agente", lambda mensajes: (nombre_tool, argumentos, texto))
+    monkeypatch.setattr(agente, "_llamar_modelo_agente", lambda system, mensajes: (nombre_tool, argumentos, texto))
 
 
 def _mock_llamada_capturando(monkeypatch, resultado):
     capturado = {}
 
-    def _fake(mensajes):
+    def _fake(system, mensajes):
+        capturado["system"] = system
         capturado["mensajes"] = mensajes
         return resultado
 
-    monkeypatch.setattr(agente, "_llamar_openai_agente", _fake)
+    monkeypatch.setattr(agente, "_llamar_modelo_agente", _fake)
     return capturado
 
 
@@ -189,7 +191,7 @@ class TestNoRompeElDiagrama:
 
 
 class TestHistorial:
-    def test_historial_se_mapea_a_roles_openai(
+    def test_historial_se_mapea_a_roles_gemini(
         self, client, db_session, crear_usuario, crear_proyecto, headers, monkeypatch
     ):
         admin = crear_usuario()
@@ -209,21 +211,21 @@ class TestHistorial:
         )
         assert resp.status_code == 200
         mensajes = capturado["mensajes"]
-        assert mensajes[0]["role"] == "system"
-        assert mensajes[1] == {"role": "user", "content": "crea una clase Cliente"}
-        assert mensajes[2] == {"role": "assistant", "content": 'Se creó la clase "Cliente".'}
-        assert mensajes[3] == {"role": "user", "content": "y ahora renombrala"}
+        assert capturado["system"]
+        assert mensajes[0] == ("user", "crea una clase Cliente")
+        assert mensajes[1] == ("model", 'Se creó la clase "Cliente".')
+        assert mensajes[2] == ("user", "y ahora renombrala")
 
 
 class TestErroresGenerales:
-    def test_openai_no_disponible(self, client, db_session, crear_usuario, crear_proyecto, headers, monkeypatch):
+    def test_ia_no_disponible(self, client, db_session, crear_usuario, crear_proyecto, headers, monkeypatch):
         admin = crear_usuario()
         proyecto = crear_proyecto(admin)
 
-        def _falla(mensajes):
-            raise agente.ComandoVozNoDisponibleError("timeout")
+        def _falla(system, mensajes):
+            raise IANoDisponibleError("timeout")
 
-        monkeypatch.setattr(agente, "_llamar_openai_agente", _falla)
+        monkeypatch.setattr(agente, "_llamar_modelo_agente", _falla)
 
         resp = client.post(
             f"/proyectos/{proyecto.id}/agente",

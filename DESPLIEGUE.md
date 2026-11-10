@@ -146,7 +146,7 @@ Completá cada valor (el archivo explica cada uno):
   openssl rand -hex 24      # para POSTGRES_PASSWORD
   openssl rand -base64 48   # para SECRET_KEY
   ```
-- `OPENAI_API_KEY` → la misma key que usás en local (o una nueva).
+- `GEMINI_API_KEY` → la misma key de Google AI Studio que usás en local (o una nueva).
 
 Guardá con `Ctrl+O`, `Enter`, `Ctrl+X`.
 
@@ -260,7 +260,7 @@ que apunte a RDS y quitar el servicio `db`.
 | El sitio no carga / el certificado no sale (`docker compose logs web` muestra errores de "challenge") | Puertos 80 o 443 cerrados en el Security Group, o `DOMINIO` mal escrito | Revisar el Security Group (Paso 1) y que `DOMINIO` sea la IP elástica con guiones + `.sslip.io` |
 | "too many certificates" en los logs de `web` | Se pidieron muchos certificados en poco tiempo (p. ej. borrando el volumen `caddy_data`) | Esperar (el límite es semanal) y no borrar `caddy_data` |
 | El micrófono no aparece o da error de permisos | Se entró por `http://` o por la IP sola | Entrar siempre por `https://<ip-con-guiones>.sslip.io` |
-| Voz, foto o asistente responden "servicio no disponible" | Falta o está mal `OPENAI_API_KEY`, o la cuenta de OpenAI no tiene saldo | Revisar `.env` y `docker compose up -d` |
+| Voz, foto o asistente responden "servicio no disponible" | Falta o está mal `GEMINI_API_KEY`, o se agotó la cuota gratuita de Gemini (429) | Revisar `.env` y `docker compose up -d` |
 | El indicador de colaboración queda gris/rojo | El WebSocket no conecta | `docker compose logs backend`; verificar que se entra por HTTPS |
 | La compilación se corta con "Killed" | Poca memoria (t3.micro) | Agregar swap (Paso 3) |
 | "Generar frontend" falla | Faltan `plantillas_android/` en el repo | Paso 0: commitearlas, `git pull` y `docker compose up -d --build` |

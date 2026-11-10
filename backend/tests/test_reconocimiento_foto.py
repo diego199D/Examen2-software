@@ -14,14 +14,15 @@ from app.schemas.reconocimiento_foto import (
     RelacionDetectadaIO,
 )
 from app.services import reconocimiento_foto
+from app.services.ai import gemini_client
 
 
 @pytest.fixture(autouse=True)
-def _sin_llamadas_reales_a_openai(monkeypatch):
+def _sin_llamadas_reales_a_la_ia(monkeypatch):
     """Ningún test de este módulo puede pegarle a la API real (cuesta plata,
     no es determinístico, y con la clave del `.env` cargada lo haría de
     verdad -- pasó una vez con un test que no mockeaba `_verificar_lineas`).
-    Los tests que necesitan una respuesta la simulan con `_ClienteOpenAIFalso`
+    Los tests que necesitan una respuesta la simulan con `_GeminiFalso`
     o mockeando la función, lo que reemplaza este bloqueo.
 
     El intento se REGISTRA y se hace fallar el test al final, en vez de solo
@@ -30,16 +31,15 @@ def _sin_llamadas_reales_a_openai(monkeypatch):
     que una excepción sola pasaría inadvertida."""
     intentos = []
 
-    class _OpenAIBloqueado:
-        def __init__(self, *_, **__):
-            intentos.append(1)
-            raise RuntimeError("llamada real a OpenAI bloqueada en tests")
+    def _bloqueado(*_, **__):
+        intentos.append(1)
+        raise RuntimeError("llamada real a Gemini bloqueada en tests")
 
-    monkeypatch.setattr(reconocimiento_foto, "OpenAI", _OpenAIBloqueado)
+    monkeypatch.setattr(gemini_client, "_cliente", _bloqueado)
     yield
     assert not intentos, (
-        "el test intentó llamar a la API real de OpenAI -- mockeá la función que la usa "
-        "(_llamar_openai_reconocimiento, _verificar_extremos_marcados, _verificar_lineas)"
+        "el test intentó llamar a la API real de Gemini -- mockeá la función que la usa "
+        "(_llamar_modelo_reconocimiento, _verificar_extremos_marcados, _verificar_lineas)"
     )
 
 
@@ -50,7 +50,7 @@ def _png_bytes(ancho=20, alto=20) -> bytes:
 
 
 def _mock_llamada(monkeypatch, resultado: ReconocimientoFotoResultado):
-    monkeypatch.setattr(reconocimiento_foto, "_llamar_openai_reconocimiento", lambda *_: resultado)
+    monkeypatch.setattr(reconocimiento_foto, "_llamar_modelo_reconocimiento", lambda *_: resultado)
 
 
 def _mock_verificacion(monkeypatch, respuesta):
@@ -78,7 +78,7 @@ def _mock_verificacion_no_debe_llamarse(monkeypatch):
 
 
 def test_prompt_establece_convencion_de_direccion_para_relaciones_dirigidas():
-    """Tripwire: _llamar_openai_reconocimiento se mockea en el resto de esta
+    """Tripwire: _llamar_modelo_reconocimiento se mockea en el resto de esta
     suite (no se llama a la API real en tests), así que la única forma de
     cubrir por test que el prompt siga pidiendo la convención origen=subclase
     /destino=superclase (HERENCIA) y origen=todo/destino=parte (AGREGACION/
@@ -93,7 +93,7 @@ def test_prompt_establece_convencion_de_direccion_para_relaciones_dirigidas():
 
 class TestCorregirDireccionPorExtremoMarcado:
     """`_corregir_direccion_por_extremo_marcado` es lógica Python pura (no
-    depende de mockear OpenAI) -- a diferencia del texto del prompt, esto sí
+    depende de mockear la IA) -- a diferencia del texto del prompt, esto sí
     se puede testear de verdad."""
 
     def test_herencia_extremo_marcado_en_destino_no_cambia(self):
@@ -147,9 +147,9 @@ class TestCorregirDireccionPorExtremoMarcado:
 
 def _mock_llamada_no_debe_llamarse(monkeypatch):
     def _falla(*_):
-        raise AssertionError("no debería haberse llamado a OpenAI -- la validación de archivo tendría que cortar antes")
+        raise AssertionError("no debería haberse llamado a la IA -- la validación de archivo tendría que cortar antes")
 
-    monkeypatch.setattr(reconocimiento_foto, "_llamar_openai_reconocimiento", _falla)
+    monkeypatch.setattr(reconocimiento_foto, "_llamar_modelo_reconocimiento", _falla)
 
 
 def _crear_clase(db_session, proyecto, nombre="ClaseExistente"):
@@ -209,7 +209,7 @@ class TestReconocer:
         assert resp.status_code == 400
         assert "no parece" in resp.json()["detail"]
 
-    def test_tipo_de_archivo_invalido_no_llama_a_openai(self, client, db_session, crear_usuario, crear_proyecto, headers, monkeypatch):
+    def test_tipo_de_archivo_invalido_no_llama_a_la_ia(self, client, db_session, crear_usuario, crear_proyecto, headers, monkeypatch):
         admin = crear_usuario()
         proyecto = crear_proyecto(admin)
         _mock_llamada_no_debe_llamarse(monkeypatch)
@@ -222,7 +222,7 @@ class TestReconocer:
         assert resp.status_code == 400
         assert "Formato de imagen no soportado" in resp.json()["detail"]
 
-    def test_archivo_demasiado_grande_no_llama_a_openai(self, client, db_session, crear_usuario, crear_proyecto, headers, monkeypatch):
+    def test_archivo_demasiado_grande_no_llama_a_la_ia(self, client, db_session, crear_usuario, crear_proyecto, headers, monkeypatch):
         admin = crear_usuario()
         proyecto = crear_proyecto(admin)
         _mock_llamada_no_debe_llamarse(monkeypatch)
@@ -311,10 +311,10 @@ _RESULTADO_HERENCIA_SIN_CONFIRMAR = ReconocimientoFotoResultado(
 
 class TestVerificacionExtremosMarcados:
     """`reconocer_diagrama` llama a `_verificar_extremos_marcados` (segunda
-    pasada de OpenAI, enfocada solo en el marcador) para las relaciones
+    pasada del modelo, enfocada solo en el marcador) para las relaciones
     dirigidas antes de devolver la vista previa -- ver el docstring del
     módulo. Estos tests mockean esa segunda pasada por separado de
-    `_llamar_openai_reconocimiento`, nunca pegan a la API real."""
+    `_llamar_modelo_reconocimiento`, nunca pegan a la API real."""
 
     def test_verificacion_completa_un_extremo_marcado_que_vino_vacio(
         self, client, db_session, crear_usuario, crear_proyecto, headers, monkeypatch
@@ -511,33 +511,25 @@ def test_herencia_nunca_lleva_multiplicidad(client, db_session, crear_usuario, c
     assert relacion["multiplicidad_destino"] is None
 
 
-class _ClienteOpenAIFalso:
-    """Reemplaza a `openai.OpenAI` dentro del módulo: devuelve `respuesta`
-    (un dict, serializado a JSON) como contenido del mensaje del modelo y
-    guarda los kwargs de la llamada, para verificar el esquema enviado."""
+class _GeminiFalso:
+    """Reemplaza a `gemini_client.image_to_diagram`: devuelve `respuesta`
+    (el dict ya parseado que daría el modelo) y guarda los kwargs de la
+    llamada, para verificar el esquema y el modelo enviados."""
 
     def __init__(self, respuesta: dict):
         self.respuesta = respuesta
         self.kwargs = None
-        cliente = self
 
-        class _Completions:
-            def create(self, **kwargs):
-                cliente.kwargs = kwargs
-                mensaje = type("M", (), {"content": json.dumps(cliente.respuesta)})
-                return type("R", (), {"choices": [type("C", (), {"message": mensaje})]})
-
-        self.chat = type("Chat", (), {"completions": _Completions()})
-
-    def __call__(self, **_):
-        return self
+    def __call__(self, **kwargs):
+        self.kwargs = kwargs
+        return json.loads(json.dumps(self.respuesta))
 
 
 class TestRespuestaDelModelo:
     """Parseo real de lo que devuelve la API (solo el cliente HTTP es falso)."""
 
     def test_multiplicidades_quedan_junto_a_su_clase(self, monkeypatch):
-        falso = _ClienteOpenAIFalso(
+        falso = _GeminiFalso(
             {
                 "reconocido": True,
                 "mensaje": "ok",
@@ -557,16 +549,15 @@ class TestRespuestaDelModelo:
                 ],
             }
         )
-        monkeypatch.setattr(reconocimiento_foto, "OpenAI", falso)
-        monkeypatch.setattr(reconocimiento_foto.settings, "OPENAI_API_KEY", "clave-de-test")
+        monkeypatch.setattr(gemini_client, "image_to_diagram", falso)
 
-        resultado = reconocimiento_foto._llamar_openai_reconocimiento(_png_bytes(), "image/png")
+        resultado = reconocimiento_foto._llamar_modelo_reconocimiento(_png_bytes(), "image/png")
 
         relacion = resultado.relaciones[0]
         assert (relacion.clase_origen, relacion.multiplicidad_origen) == ("Gimnasio", "1")
         assert (relacion.clase_destino, relacion.multiplicidad_destino) == ("Entrenador", "0..*")
         # El esquema enviado usa los nombres explícitos, no los ambiguos.
-        esquema_rel = falso.kwargs["response_format"]["json_schema"]["schema"]["properties"]["relaciones"]["items"]
+        esquema_rel = falso.kwargs["schema"]["properties"]["relaciones"]["items"]
         assert "multiplicidad_junto_a_clase_origen" in esquema_rel["required"]
         assert "multiplicidad_origen" not in esquema_rel["properties"]
         # Cada multiplicidad inmediatamente después de SU clase: con las dos
@@ -581,7 +572,7 @@ class TestRespuestaDelModelo:
             RelacionDetectadaIO(clase_origen="Persona", clase_destino="Alumno", tipo="HERENCIA"),
             RelacionDetectadaIO(clase_origen="A", clase_destino="B", tipo="AGREGACION"),
         ]
-        falso = _ClienteOpenAIFalso(
+        falso = _GeminiFalso(
             {
                 "extremos": [
                     {"indice": 0, "marcador_visible": "NO", "clase_extremo_marcado": None},
@@ -590,7 +581,7 @@ class TestRespuestaDelModelo:
                 ]
             }
         )
-        monkeypatch.setattr(reconocimiento_foto, "OpenAI", falso)
+        monkeypatch.setattr(gemini_client, "image_to_diagram", falso)
 
         verificados = reconocimiento_foto._verificar_extremos_marcados(_png_bytes(), "image/png", relaciones)
 
@@ -835,10 +826,10 @@ class TestNombresSinTildes:
 
     def test_verificacion_acepta_el_nombre_con_otra_tilde(self, monkeypatch):
         relaciones = [RelacionDetectadaIO(clase_origen="Auto", clase_destino="Vehículo", tipo="HERENCIA")]
-        falso = _ClienteOpenAIFalso(
+        falso = _GeminiFalso(
             {"extremos": [{"indice": 0, "marcador_visible": "SI", "clase_extremo_marcado": "VEHICULO"}]}
         )
-        monkeypatch.setattr(reconocimiento_foto, "OpenAI", falso)
+        monkeypatch.setattr(gemini_client, "image_to_diagram", falso)
 
         verificados = reconocimiento_foto._verificar_extremos_marcados(_png_bytes(), "image/png", relaciones)
 
@@ -868,7 +859,7 @@ class TestPrepararImagen:
         assert ancho == 2048
         assert alto < 768
 
-    def test_archivo_que_no_es_imagen_es_400_sin_llamar_a_openai(
+    def test_archivo_que_no_es_imagen_es_400_sin_llamar_a_la_ia(
         self, client, db_session, crear_usuario, crear_proyecto, headers, monkeypatch
     ):
         admin = crear_usuario()
@@ -895,7 +886,7 @@ class TestPrepararImagen:
             recibido["tipo"] = content_type
             return _RESULTADO_DOS_CLASES
 
-        monkeypatch.setattr(reconocimiento_foto, "_llamar_openai_reconocimiento", _captura)
+        monkeypatch.setattr(reconocimiento_foto, "_llamar_modelo_reconocimiento", _captura)
 
         resp = client.post(
             f"/proyectos/{proyecto.id}/reconocimiento-foto",
@@ -909,29 +900,28 @@ class TestPrepararImagen:
 
 def test_reconocimiento_usa_su_propio_modelo_de_vision(monkeypatch):
     """Las dos llamadas de CU12 (principal y verificación de marcadores)
-    usan OPENAI_VISION_MODEL, no el OPENAI_MODEL que comparten los comandos
+    usan GEMINI_VISION_MODEL, no el GEMINI_MODEL que comparten los comandos
     de voz y el agente."""
-    monkeypatch.setattr(reconocimiento_foto.settings, "OPENAI_API_KEY", "clave-de-test")
-    monkeypatch.setattr(reconocimiento_foto.settings, "OPENAI_MODEL", "modelo-de-texto")
-    monkeypatch.setattr(reconocimiento_foto.settings, "OPENAI_VISION_MODEL", "modelo-de-vision")
+    monkeypatch.setattr(reconocimiento_foto.settings, "GEMINI_MODEL", "modelo-de-texto")
+    monkeypatch.setattr(reconocimiento_foto.settings, "GEMINI_VISION_MODEL", "modelo-de-vision")
 
-    principal = _ClienteOpenAIFalso({"reconocido": True, "mensaje": "ok", "clases": [], "relaciones": []})
-    monkeypatch.setattr(reconocimiento_foto, "OpenAI", principal)
-    reconocimiento_foto._llamar_openai_reconocimiento(_png_bytes(), "image/png")
-    assert principal.kwargs["model"] == "modelo-de-vision"
+    principal = _GeminiFalso({"reconocido": True, "mensaje": "ok", "clases": [], "relaciones": []})
+    monkeypatch.setattr(gemini_client, "image_to_diagram", principal)
+    reconocimiento_foto._llamar_modelo_reconocimiento(_png_bytes(), "image/png")
+    assert principal.kwargs["modelo"] == "modelo-de-vision"
 
-    verificacion = _ClienteOpenAIFalso({"extremos": []})
-    monkeypatch.setattr(reconocimiento_foto, "OpenAI", verificacion)
+    verificacion = _GeminiFalso({"extremos": []})
+    monkeypatch.setattr(gemini_client, "image_to_diagram", verificacion)
     reconocimiento_foto._verificar_extremos_marcados(
         _png_bytes(), "image/png", [RelacionDetectadaIO(clase_origen="A", clase_destino="B", tipo="HERENCIA")]
     )
-    assert verificacion.kwargs["model"] == "modelo-de-vision"
+    assert verificacion.kwargs["modelo"] == "modelo-de-vision"
 
 
-def test_modelo_de_vision_por_defecto_es_gpt_4o():
+def test_modelo_de_vision_por_defecto_es_gemini():
     from app.core.config import Settings
 
-    assert Settings.model_fields["OPENAI_VISION_MODEL"].default == "gpt-4o"
+    assert Settings.model_fields["GEMINI_VISION_MODEL"].default.startswith("gemini-")
 
 
 # --- Paso 4: duplicados, etiquetas y deducción por claves foráneas -------------
@@ -1219,7 +1209,7 @@ def test_etiqueta_se_guarda_al_confirmar(client, db_session, crear_usuario, crea
 
 
 def test_verificar_lineas_ancla_multiplicidades_por_nombre(monkeypatch):
-    falso = _ClienteOpenAIFalso(
+    falso = _GeminiFalso(
         {
             "lineas": [
                 # El modelo repitió el par invertido: igual quedan junto a su clase.
@@ -1232,7 +1222,7 @@ def test_verificar_lineas_ancla_multiplicidades_por_nombre(monkeypatch):
             ]
         }
     )
-    monkeypatch.setattr(reconocimiento_foto, "OpenAI", falso)
+    monkeypatch.setattr(gemini_client, "image_to_diagram", falso)
 
     lineas = reconocimiento_foto._verificar_lineas(
         _png_bytes(), "image/png", [("Socio", "Pago"), ("A", "B"), ("C", "D")]
@@ -1245,4 +1235,4 @@ def test_verificar_lineas_ancla_multiplicidades_por_nombre(monkeypatch):
     assert lineas[1].existe is None
     # Índice fuera de rango ignorado: el tercer par queda "sin verificar".
     assert lineas[2] == reconocimiento_foto._LINEA_SIN_VERIFICAR
-    assert falso.kwargs["model"] == reconocimiento_foto.settings.OPENAI_VISION_MODEL
+    assert falso.kwargs["modelo"] == reconocimiento_foto.settings.GEMINI_VISION_MODEL

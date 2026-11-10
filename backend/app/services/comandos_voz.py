@@ -1,7 +1,7 @@
 """CU11 — interpretación de comandos de voz.
 
 Este módulo SOLO interpreta: recibe el texto ya transcrito por el navegador
-(Web Speech API), usa la API de OpenAI (function calling / tools) para
+(Web Speech API), usa Google Gemini (function calling, vía `app/services/ai/gemini_client.py`) para
 determinar cuál de las 5 acciones soportadas corresponde, resuelve los
 nombres de clase que citó el modelo contra las clases reales del proyecto
 (mismo criterio `casefold()` que ya usa `validar_diagrama`), y devuelve una
@@ -11,15 +11,15 @@ existen en `useDiagrama.ts` (`agregarClase`/`actualizarClase`/`eliminarClase`/
 `crearRelacion`), que ya disparan el autoguardado HTTP y la sincronización a
 Yjs (CU10). Así se evita duplicar validación/persistencia/ids nuevos.
 
-`_llamar_openai` es el único punto que toca la red -- es la función que se
+`_llamar_modelo` es el único punto que toca la red -- es la función que se
 monkeypatchea en los tests (`backend/tests/test_comandos_voz.py`) para no
 pegarle nunca a la API real, mismo patrón que ya usa
 `test_ws_diagramas.py` (`monkeypatch.setattr(yjs_rooms, "DEBOUNCE_SEGUNDOS", ...)`).
 
 `construir_tools()` y `resolver_accion()` son públicas a propósito: CU13
 (`app/services/agente.py`) las reutiliza tal cual para no duplicar las 5
-tools de function calling ni la resolución nombre→id -- ve su propia llamada
-a OpenAI (multi-turno, con historial) pero comparte este mismo "motor" de
+tools de function calling ni la resolución nombre→id -- hace su propia llamada
+a Gemini (multi-turno, con historial) pero comparte este mismo "motor" de
 acciones.
 
 **Lenguaje natural (CU11, segunda versión)**: la voz ya no usa esas 5 tools
@@ -35,13 +35,10 @@ en vez de hacer fallar todo el comando. CU13 no cambió: sigue con las 5 tools.
 
 from __future__ import annotations
 
-import json
 
-from openai import APIConnectionError, APIStatusError, APITimeoutError, OpenAI, RateLimitError
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
-from app.core.config import settings
 from app.models.atributo import VisibilidadMiembro
 from app.models.relacion import TipoRelacion
 from app.schemas.comando_voz import (
@@ -60,6 +57,8 @@ from app.schemas.comando_voz import (
 )
 from app.schemas.diagrama import ClaseIO, DiagramaIO
 from app.services.diagrama import MULTIPLICIDADES_VALIDAS, cargar_diagrama
+from app.services.ai import gemini_client
+from app.services.ai.gemini_client import IANoDisponibleError
 from app.services.nombres import normalizar_nombre
 
 MENSAJE_NO_SOPORTADO = (
@@ -75,10 +74,11 @@ class ComandoVozInvalidoError(Exception):
     traduce a 422 -- nunca se toca el diagrama en este caso."""
 
 
-class ComandoVozNoDisponibleError(Exception):
-    """Timeout, error de red o rate-limit al llamar a OpenAI. El router lo
-    traduce a 503 con un mensaje genérico -- nunca se expone el detalle
-    crudo del proveedor externo."""
+# Timeout, error de red, falta de API key o rate-limit (429) de Gemini
+# después de los reintentos. El router lo traduce a 503 con el mensaje del
+# cliente de IA (ya apto para el usuario). Alias del error del cliente
+# centralizado, para no tocar los routers que ya lo capturan.
+ComandoVozNoDisponibleError = IANoDisponibleError
 
 
 def construir_tools() -> list[dict]:
@@ -392,40 +392,15 @@ def _prompt_sistema(diagrama: DiagramaIO) -> str:
     )
 
 
-def _llamar_openai(texto: str, prompt_sistema: str) -> tuple[str | None, dict | None]:
-    if not settings.OPENAI_API_KEY:
-        raise ComandoVozNoDisponibleError("OPENAI_API_KEY no está configurada en el servidor.")
-
-    cliente = OpenAI(api_key=settings.OPENAI_API_KEY)
-    try:
-        respuesta = cliente.chat.completions.create(
-            model=settings.OPENAI_VOZ_MODEL,
-            messages=[
-                {"role": "system", "content": prompt_sistema},
-                {"role": "user", "content": texto},
-            ],
-            tools=construir_tools_voz(),
-            # "required": un comando de voz siempre es una edición. Con "auto"
-            # gpt-4o a veces contestaba texto a un pedido válido; si de verdad
-            # no se entiende, devuelve un modificar_diagrama vacío -> 422.
-            tool_choice="required",
-            parallel_tool_calls=False,
-        )
-    except (APIConnectionError, APITimeoutError, RateLimitError, APIStatusError) as err:
-        raise ComandoVozNoDisponibleError(str(err)) from err
-
-    tool_calls = respuesta.choices[0].message.tool_calls
-    if not tool_calls:
+def _llamar_modelo(texto: str, prompt_sistema: str) -> tuple[str | None, dict | None]:
+    """Único punto de este módulo que toca la red (vía el cliente Gemini
+    centralizado). Se mockea en los tests. Se fuerza una llamada a función
+    (mode ANY): un comando siempre es una edición; si de verdad no se
+    entiende, el modelo devuelve un modificar_diagrama vacío -> 422."""
+    llamada = gemini_client.parse_command(texto, prompt_sistema, construir_tools_voz())
+    if llamada is None:
         return None, None
-
-    llamada = tool_calls[0]
-    try:
-        argumentos = json.loads(llamada.function.arguments)
-    except json.JSONDecodeError as err:
-        raise ComandoVozInvalidoError(
-            "El comando no se pudo interpretar completamente. Intenta de nuevo siendo más específico."
-        ) from err
-    return llamada.function.name, argumentos
+    return llamada.nombre, llamada.argumentos
 
 
 def _resolver_clase(nombre: str, clases: list[ClaseIO]) -> ClaseIO:
@@ -732,7 +707,7 @@ _MANEJADORES = {
 
 
 def resolver_accion(nombre_tool: str | None, argumentos: dict | None, clases: list[ClaseIO]) -> AccionVoz:
-    """Dado el nombre/argumentos de una tool ya devuelta por OpenAI (propios o
+    """Dado el nombre/argumentos de una tool ya devuelta por el modelo (propios o
     de CU13), despacha al manejador de la acción correspondiente y arma la
     `AccionVoz` con ids ya resueltos. Levanta `ComandoVozInvalidoError` si
     `nombre_tool` es `None` (no hubo tool_call) o no corresponde a ninguna de
@@ -747,7 +722,7 @@ def resolver_accion(nombre_tool: str | None, argumentos: dict | None, clases: li
 def interpretar_comando(proyecto_id: int, texto: str, db: Session) -> AccionVoz:
     diagrama = cargar_diagrama(proyecto_id, db)
     prompt = _prompt_sistema(diagrama)
-    nombre_tool, argumentos = _llamar_openai(texto, prompt)
+    nombre_tool, argumentos = _llamar_modelo(texto, prompt)
     if nombre_tool == "modificar_diagrama":
         return _manejar_modificar_diagrama(argumentos or {}, diagrama)
     return resolver_accion(nombre_tool, argumentos, diagrama.clases)

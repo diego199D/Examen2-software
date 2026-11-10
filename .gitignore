@@ -36,3 +36,6 @@ mobile/**/*.iml
 .idea/
 .DS_Store
 Thumbs.db
+# Archivo local con secretos (API key de Gemini) — nunca subir
+/datos
+/datos.md

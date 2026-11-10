@@ -11,23 +11,18 @@ class Settings(BaseSettings):
 
     CORS_ORIGINS: str = "http://localhost:5173,http://localhost:5174"
 
-    # CU11 — interpretación de comandos de voz vía function calling. Opcional
-    # (no requerida al arrancar) para no romper `pytest`/entornos sin la key
-    # configurada todavía -- `app/services/comandos_voz.py` valida que esté
-    # presente recién al momento de llamar a la API, con un error claro.
-    OPENAI_API_KEY: str | None = None
-    OPENAI_MODEL: str = "gpt-4o-mini"
-    # CU12 — modelo aparte solo para el reconocimiento de diagramas por foto.
-    # Medido con una imagen real: gpt-4o-mini perdía clases e inventaba
-    # relaciones distintas en cada intento; gpt-4o, estable (ver encabezado
-    # de `app/services/reconocimiento_foto.py`). Comandos de voz y el agente
-    # siguen con sus propios modelos (texto, no visión).
-    OPENAI_VISION_MODEL: str = "gpt-4o"
-    # CU11 — modelo aparte para los comandos de voz: un solo comando puede
-    # crear varias clases y deducir tipo/multiplicidad de sus relaciones por
-    # el dominio, algo en lo que gpt-4o-mini se equivoca bastante más. El
-    # agente (CU13) sigue con OPENAI_MODEL.
-    OPENAI_VOZ_MODEL: str = "gpt-4o"
+    # IA (Google Gemini, SDK `google-genai`): comandos de texto/voz (CU11),
+    # reconocimiento por foto (CU12) y el agente Senior del chat grupal.
+    # Opcional al arrancar (no rompe `pytest`); `app/services/ai/gemini_client.py`
+    # valida que esté presente recién al llamar a la API, con un error claro.
+    # La key vive solo en el backend: el frontend nunca habla con Gemini.
+    GEMINI_API_KEY: str | None = None
+    # Modelo principal: texto + tool calling (comandos, agente Senior).
+    GEMINI_MODEL: str = "gemini-3.5-flash"
+    # Modelo para importar diagramas desde imagen (puede ser el mismo).
+    GEMINI_VISION_MODEL: str = "gemini-3.5-flash"
+    # Respaldo si el principal responde 429/503 después de los reintentos.
+    GEMINI_FALLBACK_MODEL: str | None = "gemini-3.1-flash-lite"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

@@ -1,6 +1,6 @@
 """Schemas de CU11 (comandos de voz): la "acción estructurada" que
 `app/services/comandos_voz.py` devuelve luego de interpretar un comando con
-OpenAI function calling. Los ids ya vienen resueltos (nunca nombres crudos) y
+function calling de Gemini. Los ids ya vienen resueltos (nunca nombres crudos) y
 nunca se inventa un `id` nuevo acá -- eso lo sigue generando el cliente con
 `crypto.randomUUID()`, igual que hoy para cualquier clase/atributo/relación
 creada a mano (ver `useDiagrama.ts`)."""

@@ -9,7 +9,7 @@ Sesión del 2026-11-09. Registro de lo que se hizo para que la próxima sesión 
 2. **Se creó `.env` en la raíz** a partir de `.env.produccion.example`, con:
    - `DOMINIO=localhost`
    - `POSTGRES_PASSWORD` y `SECRET_KEY` aleatorias (generadas con `secrets` de Python).
-   - `OPENAI_API_KEY` **quedó con el valor de ejemplo** → voz (CU11), foto (CU12) y asistente (CU13) no funcionan hasta poner una key real.
+   - (Segundo parcial) la IA pasó a Google Gemini: `GEMINI_API_KEY` ya está configurada en `.env` y `backend/.env`.
    - El `.env` está en `.gitignore` (verificado), no se sube a git.
 3. **Se levantó todo**: `docker compose up --build -d` → contenedores `db`, `backend`, `web` corriendo
    (el backend aplica `alembic upgrade head` solo al arrancar).
@@ -38,6 +38,6 @@ docker compose up -d backend         # reiniciar backend tras editar .env
 
 ## Pendiente
 
-- Poner una `OPENAI_API_KEY` real en `.env` (raíz) y correr `docker compose up -d backend` para habilitar voz/foto/asistente.
+- (Hecho) la key de Gemini ya está en `.env`; tras cambiarla, `docker compose up -d backend`.
 - Para desarrollar con recarga automática conviene el modo manual (`uvicorn --reload` + `npm run dev`, ver `CLAUDE.md` → Comandos);
   para eso falta crear `backend/venv`, `backend/.env` (desde `backend/.env.example`) y tener PostgreSQL local — no se hizo en esta sesión.

@@ -7,7 +7,7 @@ from app.services import comandos_voz
 
 def _mock_llamada(monkeypatch, nombre_tool, argumentos):
     monkeypatch.setattr(
-        comandos_voz, "_llamar_openai", lambda texto, prompt: (nombre_tool, argumentos)
+        comandos_voz, "_llamar_modelo", lambda texto, prompt: (nombre_tool, argumentos)
     )
 
 
@@ -243,14 +243,14 @@ class TestErroresGenerales:
         )
         assert resp.status_code == 422
 
-    def test_openai_no_disponible(self, client, db_session, crear_usuario, crear_proyecto, headers, monkeypatch):
+    def test_ia_no_disponible(self, client, db_session, crear_usuario, crear_proyecto, headers, monkeypatch):
         admin = crear_usuario()
         proyecto = crear_proyecto(admin)
 
         def _falla(texto, prompt):
             raise comandos_voz.ComandoVozNoDisponibleError("timeout")
 
-        monkeypatch.setattr(comandos_voz, "_llamar_openai", _falla)
+        monkeypatch.setattr(comandos_voz, "_llamar_modelo", _falla)
 
         resp = client.post(
             f"/proyectos/{proyecto.id}/comandos-voz",
@@ -302,7 +302,7 @@ class TestErroresGenerales:
 
 # --- Lenguaje natural: acción compuesta `modificar_diagrama` ----------------
 # `_manejar_modificar_diagrama` es una función pura: se prueba directo contra
-# un `DiagramaIO` armado a mano, sin BD ni OpenAI; y un test pasa por HTTP.
+# un `DiagramaIO` armado a mano, sin BD ni IA; y un test pasa por HTTP.
 
 from app.schemas.diagrama import AtributoIO, ClaseIO, DiagramaIO, RelacionIO  # noqa: E402
 from app.services.comandos_voz import ComandoVozInvalidoError, _manejar_modificar_diagrama  # noqa: E402
