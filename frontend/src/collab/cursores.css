@@ -1,0 +1,81 @@
+/* CU10 — cursores en vivo de otros colaboradores. */
+
+.cursores-overlay {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 60;
+}
+
+.cursor-remoto {
+  position: fixed;
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  transform: translate(-1px, -2px);
+  transition: left 90ms linear, top 90ms linear;
+  will-change: left, top;
+}
+
+.cursor-remoto__etiqueta {
+  padding: 1px 6px;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  line-height: 16px;
+  color: #fff;
+  white-space: nowrap;
+  background: var(--cursor-color, var(--accent));
+  border-radius: var(--radius-sm);
+  transform: translateY(1px);
+}
+
+/* --- Presencia / conexión (Toolbar) ------------------------------------- */
+
+.app-toolbar__presencia {
+  display: flex;
+  align-items: center;
+  margin-left: -4px;
+}
+
+.app-toolbar__avatar-colaborador {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  margin-left: -4px;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: #fff;
+  background: var(--colaborador-color, var(--accent));
+  border: 1.5px solid var(--bg-surface);
+  border-radius: 50%;
+}
+
+.app-toolbar__conexion {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+}
+
+.app-toolbar__conexion-punto {
+  width: 7px;
+  height: 7px;
+  background: var(--success);
+  border-radius: 50%;
+}
+
+.app-toolbar__conexion--desconectado .app-toolbar__conexion-punto {
+  background: var(--danger);
+}
+
+.app-toolbar__conexion--conectando .app-toolbar__conexion-punto {
+  background: var(--text-secondary);
+  animation: conexion-parpadeo 1s ease-in-out infinite;
+}
+
+@keyframes conexion-parpadeo {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}

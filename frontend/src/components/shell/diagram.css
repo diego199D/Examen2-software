@@ -1,0 +1,378 @@
+/* ============================================================================
+   Lienzo del diagrama — nodos de clase UML, aristas y controles de React Flow
+   ========================================================================== */
+
+/* --- Nodo de clase UML ------------------------------------------------- */
+
+.class-node {
+  min-width: 176px;
+  background: var(--node-body-bg);
+  border: var(--border-hairline) solid var(--node-border);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-popover);
+}
+
+.class-node--selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+/* Franja agarrable para reposicionar la clase — el resto del nodo es texto
+   editable (nodrag), así que sin esto no hay forma visible/usable de
+   arrastrarlo. */
+.class-node__drag-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  height: 10px;
+  background: var(--node-header-bg);
+  border-radius: calc(var(--radius-sm) - 1px) calc(var(--radius-sm) - 1px) 0 0;
+  cursor: grab;
+}
+
+.class-node__drag-handle:active {
+  cursor: grabbing;
+}
+
+.class-node__drag-handle span {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--node-header-text);
+  opacity: 0.5;
+}
+
+.class-node__header {
+  position: relative;
+  padding: 5px 10px;
+  text-align: center;
+  color: var(--node-header-text);
+  background: var(--node-header-bg);
+}
+
+.class-node--selected .class-node__header,
+.class-node--selected .class-node__drag-handle {
+  background: var(--node-header-bg-selected);
+}
+
+.class-node__stereotype {
+  font-family: var(--font-sans);
+  font-size: 10px;
+  line-height: 1.3;
+  opacity: 0.85;
+  cursor: text;
+}
+
+.class-node__stereotype:hover {
+  opacity: 1;
+  text-decoration: underline dotted;
+}
+
+/* Placeholder del estereotipo vacío: invisible en reposo para no generar
+   ruido visual en cada nodo — se revela solo al pasar el mouse por el nodo
+   (o si ya está seleccionado), donde sigue siendo clickeable para asignarlo. */
+.class-node__stereotype--vacio {
+  opacity: 0;
+}
+
+.react-flow__node:hover .class-node__stereotype--vacio,
+.class-node--selected .class-node__stereotype--vacio {
+  opacity: 0.6;
+}
+
+.class-node__stereotype--vacio:hover {
+  opacity: 1;
+}
+
+.class-node__name {
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: var(--text-sm);
+  letter-spacing: 0.01em;
+  cursor: text;
+}
+
+.class-node__name:hover {
+  text-decoration: underline dotted;
+}
+
+.class-node__name--abstract {
+  font-style: italic;
+}
+
+.class-node__stereotype-input,
+.class-node__name-input {
+  width: 100%;
+  padding: 0;
+  font-family: var(--font-sans);
+  color: inherit;
+  text-align: center;
+  background: transparent;
+  border: none;
+  border-bottom: 1px dashed var(--accent);
+  outline: none;
+}
+
+.class-node__stereotype-input {
+  font-size: 10px;
+}
+
+.class-node__name-input {
+  font-weight: 600;
+  font-size: var(--text-sm);
+}
+
+.class-node__abstract-toggle {
+  position: absolute;
+  z-index: 1;
+  top: 3px;
+  right: 3px;
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  font-family: var(--font-sans);
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--node-header-text);
+  background: transparent;
+  border: 1px solid currentColor;
+  border-radius: 3px;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+
+.class-node__abstract-toggle[aria-pressed='true'] {
+  opacity: 1;
+  background: currentColor;
+  color: var(--node-header-bg);
+}
+
+.react-flow__node:hover .class-node__abstract-toggle,
+.class-node--selected .class-node__abstract-toggle {
+  opacity: 1;
+}
+
+.class-node__compartment {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 11px;
+  line-height: 1.6;
+  border-top: var(--border-hairline) solid var(--border);
+}
+
+.class-node__miembro {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 2px 10px;
+  cursor: text;
+}
+
+.class-node__miembro:hover {
+  background: var(--bg-hover);
+}
+
+.class-node__miembro span {
+  overflow: hidden;
+  white-space: pre;
+  text-overflow: ellipsis;
+}
+
+.class-node__miembro-quitar {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+  font-size: 12px;
+  line-height: 1;
+  color: var(--text-secondary);
+  background: transparent;
+  border: none;
+  border-radius: 2px;
+  opacity: 0;
+}
+
+.class-node__miembro:hover .class-node__miembro-quitar {
+  opacity: 1;
+}
+
+.class-node__miembro-quitar:hover {
+  color: var(--danger);
+  background: var(--danger-bg);
+}
+
+.class-node__miembro-agregar {
+  padding: 2px 10px;
+  color: var(--text-secondary);
+  opacity: 0.7;
+  cursor: pointer;
+}
+
+.class-node__miembro-agregar:hover {
+  opacity: 1;
+  background: var(--bg-hover);
+}
+
+.class-node__miembro-input {
+  width: 100%;
+  padding: 2px 10px;
+  font: inherit;
+  color: inherit;
+  background: var(--bg-hover);
+  border: none;
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
+}
+
+/* Puntos de conexión: discretos, aparecen al pasar el ratón o al seleccionar */
+.class-node__handle.react-flow__handle {
+  width: 7px;
+  height: 7px;
+  min-width: 0;
+  min-height: 0;
+  background: var(--bg-surface);
+  border: var(--border-hairline) solid var(--border-strong);
+  border-radius: 2px;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+
+.react-flow__node:hover .class-node__handle.react-flow__handle,
+.class-node--selected .class-node__handle.react-flow__handle {
+  opacity: 1;
+}
+
+/* --- Aristas UML ------------------------------------------------------- */
+
+.app-canvas .react-flow__edge-path {
+  /* El color real se setea inline por arista (EDGE_STYLE en useDiagrama.ts,
+     un literal, no var() -- ver comentario ahí) y siempre gana sobre esta
+     regla de clase; esto solo cubre stroke-width. */
+  stroke-width: 1.5;
+}
+
+.app-canvas .react-flow__edge.selected .react-flow__edge-path,
+.app-canvas .react-flow__edge:focus .react-flow__edge-path,
+.app-canvas .react-flow__edge:focus-visible .react-flow__edge-path {
+  stroke: var(--accent);
+}
+
+/* Etiquetas de arista custom (RelacionEdge.tsx) — reemplazan el label SVG
+   de fábrica de React Flow, que no soporta más de una etiqueta por arista. */
+.edge-multiplicidad {
+  position: absolute;
+  padding: 0 3px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-primary);
+  background: var(--canvas-bg);
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.edge-etiqueta {
+  position: absolute;
+  padding: 1px 4px;
+  font-family: var(--font-sans);
+  font-size: 10px;
+  color: var(--text-primary);
+  background: var(--canvas-bg);
+  border-radius: 2px;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+/* defs SVG de los marcadores: fuera de flujo, sin ocupar espacio */
+.uml-markers {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+}
+
+/* --- Controles de zoom ----------------------------------------------- */
+
+.app-canvas .react-flow__controls {
+  box-shadow: none;
+  border: var(--border-hairline) solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.app-canvas .react-flow__controls-button {
+  background: var(--bg-surface);
+  border-bottom: var(--border-hairline) solid var(--border);
+}
+
+.app-canvas .react-flow__controls-button:hover {
+  background: var(--bg-hover);
+}
+
+.app-canvas .react-flow__controls-button svg {
+  fill: var(--text-secondary);
+}
+
+/* --- Overlay de estado (cargando / error / vacío) ---------------------- */
+
+.canvas-overlay {
+  position: absolute;
+  top: var(--space-4);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 5;
+  padding: var(--space-2) var(--space-3);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  background: var(--bg-surface);
+  border: var(--border-hairline) solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-popover);
+  pointer-events: none;
+}
+
+.canvas-overlay--error {
+  color: var(--danger);
+  border-color: #e6c3c3;
+  background: var(--danger-bg);
+}
+
+/* --- Atribución ----------------------------------------------------- */
+
+.app-canvas .react-flow__attribution {
+  background: transparent;
+  font-size: 10px;
+}
+
+.app-canvas .react-flow__attribution a {
+  color: var(--text-secondary);
+}
+
+/* Punto de control arrastrable de una relación (RelacionEdge.tsx), visible
+   solo con la arista seleccionada. pointer-events explícito: el contenedor
+   de EdgeLabelRenderer no recibe eventos por defecto. */
+.edge-control {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--canvas-bg);
+  border: 2px solid var(--accent, #2b4c7e);
+  box-shadow: 0 0 0 3px rgba(43, 76, 126, 0.15);
+  cursor: grab;
+  pointer-events: all;
+  touch-action: none;
+  z-index: 10;
+}
+
+.edge-control:active {
+  cursor: grabbing;
+}

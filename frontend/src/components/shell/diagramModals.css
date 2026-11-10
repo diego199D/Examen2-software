@@ -1,0 +1,9 @@
+/* ============================================================================
+   Modal de relación (RelacionEditorModal)
+   ========================================================================== */
+
+.relacion-form__multiplicidades {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-3);
+}

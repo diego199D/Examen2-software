@@ -1,0 +1,38 @@
+# ==== Backend (Python / FastAPI) ====
+backend/venv/
+backend/__pycache__/
+backend/**/__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# Variables de entorno / secretos
+.env
+*.env
+!.env.example
+
+# ==== Frontend (Node / React / Vite) ====
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+npm-debug.log*
+
+# ==== Mobile (Flutter / Dart) ====
+mobile/.dart_tool/
+mobile/.flutter-plugins
+mobile/.flutter-plugins-dependencies
+mobile/.pub-cache/
+mobile/.pub/
+mobile/build/
+mobile/android/.gradle/
+mobile/android/local.properties
+mobile/ios/Flutter/Flutter.framework
+mobile/ios/Flutter/Flutter.podspec
+mobile/ios/Pods/
+mobile/**/*.iml
+
+# ==== Editor / SO ====
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

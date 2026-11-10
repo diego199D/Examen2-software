@@ -1,0 +1,98 @@
+/* ============================================================================
+   AppChrome — barra superior para las páginas que no son el editor
+   ========================================================================== */
+
+.app-chrome {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background: var(--bg-base);
+}
+
+.chrome-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  height: var(--toolbar-height);
+  padding: 0 var(--space-4);
+  background: var(--bg-surface);
+  border-bottom: var(--border-hairline) solid var(--border);
+}
+
+.chrome-bar__app {
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.chrome-bar__nav {
+  display: flex;
+  gap: var(--space-1);
+}
+
+.chrome-bar__link {
+  padding: 4px 10px;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  border-radius: var(--radius-sm);
+}
+
+.chrome-bar__link:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+.chrome-bar__link.active {
+  color: var(--accent);
+  background: var(--bg-hover);
+  font-weight: 500;
+}
+
+.chrome-bar__user {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-left: auto;
+}
+
+.chrome-bar__chip {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+.chrome-bar__avatar {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--accent-contrast);
+  background: var(--accent);
+  border-radius: var(--radius-sm);
+}
+
+.chrome-bar__logout {
+  height: 28px;
+  padding: 0 10px;
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+  background: var(--bg-surface);
+  border: var(--border-hairline) solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.chrome-bar__logout:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-strong);
+}
+
+.app-page {
+  flex: 1 1 auto;
+  width: 100%;
+  max-width: 880px;
+  margin: 0 auto;
+  padding: var(--space-6) var(--space-4);
+}

@@ -1,0 +1,7 @@
+# Scripts y configuración que corren dentro de contenedores Linux: siempre
+# con fin de línea LF, aunque se editen en Windows (core.autocrlf=true los
+# convertiría a CRLF y "/bin/sh^M" no arranca).
+*.sh text eol=lf
+Dockerfile text eol=lf
+Caddyfile text eol=lf
+docker-compose.yml text eol=lf

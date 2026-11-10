@@ -1,0 +1,81 @@
+/* ============================================================================
+   Diagramador UML — tokens del sistema de diseño
+   Estética: "mesa de dibujo técnico". Bordes finos, radios pequeños, sin
+   sombras difusas. Tema único claro.
+   ========================================================================== */
+
+:root {
+  color-scheme: light;
+
+  /* --- Color: superficies y texto ------------------------------------------ */
+  --bg-base: #f6f7f9;
+  --bg-surface: #ffffff;
+  --bg-hover: #eef1f5;
+  --text-primary: #12161c;
+  --text-secondary: #5f5e5a;
+
+  /* --- Color: acento técnico --------------------------------------------- */
+  --accent: #2b4c7e;
+  --accent-hover: #1f3a61;
+  --accent-contrast: #ffffff;
+
+  /* --- Color: líneas ---------------------------------------------------- */
+  --border: #d8dce3;
+  --border-strong: #b9c0cb;
+
+  /* --- Estados -------------------------------------------------------------- */
+  --success: #3c7a5c;
+  --success-bg: #e1f5ee;
+  --danger: #b03a3a;
+  --danger-bg: #fbeaea;
+
+  /* --- Lienzo / nodos del diagrama (consumidos en la fase de nodos) ------- */
+  --canvas-bg: #f6f7f9;
+  --canvas-dot: #cdd3dc;
+  --node-header-bg: #33383f;
+  --node-header-bg-selected: var(--accent);
+  --node-header-text: #ffffff;
+  --node-body-bg: #ffffff;
+  /* Borde de clase un poco más marcado que --border-strong (sin tocar ese
+     token general, usado también en paneles/inputs fuera del lienzo). */
+  --node-border: #a3abb8;
+  /* Color canónico de líneas de relación y marcadores (triángulo/rombo) --
+     antes reusaban --border-strong (#b9c0cb), muy poco contraste sobre
+     --canvas-bg. NO se consume con var() en ningún lado a propósito: los
+     estilos de SVG (marcadores en UmlMarkers.tsx, stroke de arista en
+     useDiagrama.ts) no resuelven var() de forma confiable, y además rompe
+     la exportación a PNG de CU07 (html-to-image no resuelve custom
+     properties dentro del SVG clonado) -- ambos usan este mismo hex como
+     literal. Si se cambia este valor, cambiarlo también ahí. */
+  --edge-stroke: #4a5261;
+
+  /* --- Tipografía --------------------------------------------------------- */
+  --font-sans: "Inter", system-ui, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "Cascadia Code", Consolas, monospace;
+  --text-xs: 11px;
+  --text-sm: 12px;
+  --text-base: 13px;
+  --text-md: 14px;
+  --text-lg: 16px;
+
+  /* --- Forma: bordes finos, radios pequeños, nada de sombras difusas ----- */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --border-hairline: 1px;
+  /* Única sombra permitida: elevación mínima para menús / popovers. */
+  --shadow-popover: 0 1px 2px rgba(18, 22, 28, 0.12), 0 0 0 1px var(--border);
+
+  /* --- Dimensiones del shell -------------------------------------------- */
+  --sidebar-width: 264px;
+  --sidebar-width-colapsado: 34px;
+  --toolbar-height: 44px;
+  --agente-width: 320px;
+
+  /* --- Espaciado --------------------------------------------------------- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+}

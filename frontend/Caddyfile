@@ -1,0 +1,30 @@
+# Caddy: sirve el frontend y hace de proxy al backend. Con un nombre de
+# dominio real en DOMINIO (p. ej. 54-12-3-4.sslip.io) saca y renueva solo un
+# certificado de Let's Encrypt -- HTTPS es obligatorio: el micrófono de los
+# comandos de voz (CU11) solo funciona en páginas seguras. Con
+# DOMINIO=localhost usa un certificado local (para probar en la PC).
+
+{$DOMINIO} {
+	encode zstd gzip
+
+	# Foto (CU12) e importación XMI suben hasta 10MB.
+	request_body {
+		max_size 15MB
+	}
+
+	# La API va bajo /api porque el frontend y el backend tienen rutas con el
+	# mismo nombre (/proyectos/...). handle_path quita el /api antes de pasar
+	# al backend. Incluye el WebSocket de colaboración (/api/ws/...): Caddy
+	# lo proxya sin configuración extra.
+	handle_path /api/* {
+		reverse_proxy backend:8000
+	}
+
+	# El resto es la SPA: cualquier ruta que no sea un archivo real
+	# (/proyectos/12, /perfil...) devuelve index.html y la resuelve React.
+	handle {
+		root * /srv
+		try_files {path} /index.html
+		file_server
+	}
+}
